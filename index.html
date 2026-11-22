@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>NEON SNAKE — Ultra Complete Edition</title>
+<style>
+/* ============================================================
+   UI / CSS — thème néon rétro-arcade, animations easing
+   ============================================================ */
+:root{
+  --neon:#0ff; --neon2:#f0f; --neon3:#0f0; --bg0:#05010f; --bg1:#0b0620;
+  --panel:rgba(10,4,30,.92);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg0);
+  font-family:'Courier New',monospace;color:#cfe8ff;user-select:none}
+#gameWrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+canvas{display:block;background:#04010d;border-radius:6px;
+  box-shadow:0 0 30px rgba(0,255,255,.25),0 0 90px rgba(255,0,255,.15) inset}
+/* ---------- Overlays / écrans ---------- */
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(20,8,60,.85),rgba(3,0,12,.96));
+  z-index:10;transition:opacity .25s ease, transform .25s ease;overflow-y:auto;padding:16px}
+.screen.hidden{opacity:0;pointer-events:none;transform:scale(1.04)}
+.panel{background:var(--panel);border:1px solid rgba(0,255,255,.35);border-radius:12px;
+  padding:18px 22px;box-shadow:0 0 24px rgba(0,255,255,.15);max-width:560px;width:min(560px,94vw);
+  animation:pop .3s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+h1.logo{font-size:clamp(28px,7vw,54px);letter-spacing:.18em;margin-bottom:4px;
+  color:#fff;text-shadow:0 0 8px var(--neon),0 0 25px var(--neon),0 0 60px var(--neon2);
+  animation:logoPulse 2.2s ease-in-out infinite}
+@keyframes logoPulse{0%,100%{text-shadow:0 0 8px var(--neon),0 0 25px var(--neon),0 0 60px var(--neon2)}
+  50%{text-shadow:0 0 14px var(--neon3),0 0 40px var(--neon),0 0 80px var(--neon2)}}
+h2{color:#fff;text-shadow:0 0 10px var(--neon);letter-spacing:.12em;margin-bottom:12px;font-size:1.2em}
+.sub{color:#7fdfff;font-size:.8em;letter-spacing:.3em;margin-bottom:18px;opacity:.8}
+/* ---------- Boutons ---------- */
+.btn{display:inline-block;background:linear-gradient(180deg,rgba(0,255,255,.12),rgba(0,255,255,.04));
+  color:#dffcff;border:1px solid rgba(0,255,255,.5);border-radius:8px;padding:10px 18px;margin:5px;
+  cursor:pointer;font-family:inherit;font-size:.95em;letter-spacing:.08em;
+  transition:all .18s cubic-bezier(.2,1.4,.4,1)}
+.btn:hover,.btn:focus{background:rgba(0,255,255,.28);box-shadow:0 0 16px rgba(0,255,255,.5);transform:translateY(-2px)}
+.btn.primary{border-color:var(--neon3);background:linear-gradient(180deg,rgba(0,255,0,.16),rgba(0,255,0,.05));color:#d8ffd8}
+.btn.danger{border-color:#f55;background:linear-gradient(180deg,rgba(255,0,0,.15),transparent);color:#ffd8d8}
+.btn.small{padding:6px 10px;font-size:.78em}
+.btn.sel{background:rgba(0,255,255,.35);box-shadow:0 0 14px var(--neon)}
+.row{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;align-items:center;margin:6px 0}
+.label{color:#9ab;font-size:.75em;letter-spacing:.2em;margin-right:6px}
+/* ---------- HUD ---------- */
+#hud{position:fixed;top:0;left:0;right:0;z-index:5;display:none;justify-content:center;pointer-events:none;padding:6px}
+#hudInner{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;pointer-events:auto;
+  background:rgba(4,1,16,.7);border:1px solid rgba(0,255,255,.25);border-radius:10px;padding:6px 14px;font-size:.85em}
+.hudItem{text-align:center;min-width:64px}
+.hudItem .v{color:#fff;font-size:1.25em;text-shadow:0 0 8px var(--neon)}
+.hudItem .l{color:#7fdfff;font-size:.6em;letter-spacing:.15em}
+#powerups{display:flex;gap:6px;align-items:center}
+.pu{display:flex;flex-direction:column;align-items:center;font-size:.6em;color:#fff;
+  padding:2px 6px;border-radius:6px;border:1px solid;position:relative;overflow:hidden;min-width:44px}
+.pu .bar{position:absolute;bottom:0;left:0;height:3px;background:#fff;transition:width .1s linear}
+#comboWrap{text-align:center}
+#comboTxt{color:#fff;text-shadow:0 0 10px var(--neon2);font-size:1.2em}
+#comboBar{height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin-top:2px;overflow:hidden;width:90px}
+#comboFill{height:100%;background:linear-gradient(90deg,#0f0,#ff0,#f0f);width:100%;transition:width .08s linear}
+/* ---------- Toasts achievements ---------- */
+#toasts{position:fixed;top:64px;right:10px;z-index:50;display:flex;flex-direction:column;gap:8px}
+.toast{background:linear-gradient(135deg,rgba(30,0,60,.95),rgba(0,40,60,.95));border:1px solid var(--neon);
+  border-radius:10px;padding:10px 14px;min-width:230px;box-shadow:0 0 18px rgba(0,255,255,.4);
+  animation:toastIn .4s cubic-bezier(.2,1.5,.4,1)}
+.toast.out{animation:toastOut .4s ease forwards}
+@keyframes toastIn{from{transform:translateX(120%);opacity:0}to{transform:none;opacity:1}}
+@keyframes toastOut{to{transform:translateX(120%);opacity:0}}
+.toast .t1{color:#fff;font-size:.7em;letter-spacing:.25em}
+.toast .t2{color:#ffe94a;text-shadow:0 0 8px #fa0;font-size:.95em;margin-top:2px}
+/* ---------- Listes ---------- */
+.scroll{max-height:46vh;overflow-y:auto;padding-right:6px}
+.ach{display:flex;gap:10px;align-items:center;padding:7px 9px;margin:5px 0;border-radius:8px;
+  border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.ach.done{border-color:var(--neon3);background:rgba(0,255,0,.06)}
+.ach .ico{font-size:1.4em;filter:grayscale(1);opacity:.4}
+.ach.done .ico{filter:none;opacity:1}
+.ach .nm{color:#fff;font-size:.85em}
+.ach .ds{color:#89a;font-size:.7em}
+table.hs{width:100%;border-collapse:collapse;font-size:.8em;margin-top:6px}
+table.hs td,table.hs th{padding:4px 7px;border-bottom:1px solid rgba(0,255,255,.12);text-align:left}
+table.hs th{color:var(--neon);letter-spacing:.15em;font-size:.75em}
+table.hs tr.me td{color:#ffe94a}
+.skinBox{display:inline-flex;flex-direction:column;align-items:center;margin:6px;padding:8px;
+  border:1px solid rgba(255,255,255,.15);border-radius:10px;cursor:pointer;transition:all .18s}
+.skinBox:hover{transform:translateY(-3px);box-shadow:0 0 14px rgba(0,255,255,.3)}
+.skinBox.sel{border-color:var(--neon);box-shadow:0 0 16px rgba(0,255,255,.45)}
+.skinBox.locked{opacity:.4}
+.skinBox .req{font-size:.6em;color:#a86;margin-top:3px}
+.swatch{width:64px;height:14px;border-radius:7px}
+.skinBox .nm{font-size:.7em;margin-top:5px;color:#9cf}
+.skinBox.sel{outline:none}
+.grid2{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.lvlBtn{padding:10px 4px;border-radius:8px;border:1px solid rgba(0,255,255,.3);cursor:pointer;text-align:center;font-size:.9em}
+.lvlBtn:hover{background:rgba(0,255,255,.15)}
+.lvlBtn.lock{opacity:.3;cursor:not-allowed}
+.lvlBtn.cur{border-color:var(--neon3);box-shadow:0 0 10px rgba(0,255,0,.4)}
+/* ---------- Réglages ---------- */
+.setRow{display:flex;justify-content:space-between;align-items:center;margin:9px 0;font-size:.85em;gap:10px}
+input[type=range]{width:150px;accent-color:#0ff}
+select{background:#0a0420;color:#cfe8ff;border:1px solid rgba(0,255,255,.4);border-radius:6px;padding:4px 8px;font-family:inherit}
+.keyCap{border:1px solid var(--neon);border-radius:5px;padding:3px 9px;cursor:pointer;color:#dff;min-width:70px;text-align:center;display:inline-block;margin-right:8px}
+.keyCap:hover{background:rgba(0,255,255,.2)}
+/* ---------- D-pad mobile ---------- */
+#dpad{position:fixed;bottom:12px;left:12px;z-index:6;display:none;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,56px);gap:4px;opacity:.75}
+#dpad button{background:rgba(0,255,255,.12);border:1px solid rgba(0,255,255,.4);border-radius:10px;color:#0ff;font-size:1.3em}
+.statGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:.85em;margin:10px 0}
+.statGrid .k{color:#7fdfff}.statGrid .v{color:#fff;text-align:right;text-shadow:0 0 6px var(--neon)}
+.modeCard{display:inline-block;width:150px;margin:6px;padding:12px 8px;border:1px solid rgba(255,255,255,.15);
+  border-radius:10px;cursor:pointer;text-align:center;transition:all .18s;position:relative}
+.modeCard:hover{transform:translateY(-4px);box-shadow:0 0 18px rgba(0,255,255,.35);border-color:var(--neon)}
+.modeCard .ic{font-size:1.7em}
+.modeCard .nm{color:#fff;margin-top:6px;font-size:.85em;letter-spacing:.08em}
+.modeCard .ds{color:#79a;font-size:.62em;margin-top:3px}
+.modeCard.lock{opacity:.35;cursor:not-allowed}
+@media (max-width:700px){#hudInner{font-size:.7em;gap:10px}.hudItem{min-width:44px}.grid2{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div id="gameWrap"><canvas id="canvas"></canvas></div>
+
+<!-- HUD -->
+<div id="hud"><div id="hudInner">
+  <div class="hudItem"><div class="v" id="hScore">0</div><div class="l">SCORE</div></div>
+  <div class="hudItem"><div class="v" id="hBest">0</div><div class="l">RECORD</div></div>
+  <div class="hudItem" id="comboWrap"><div id="comboTxt">—</div><div id="comboBar"><div id="comboFill"></div></div><div class="l">COMBO</div></div>
+  <div class="hudItem"><div class="v" id="hLen">3</div><div class="l">LONGUEUR</div></div>
+  <div class="hudItem"><div class="v" id="hTime">0:00</div><div class="l">TEMPS</div></div>
+  <div class="hudItem"><div class="v" id="hObj">—</div><div class="l" id="hObjL">OBJECTIF</div></div>
+  <div id="powerups"></div>
+  <div class="hudItem"><button class="btn small" id="btnPause2">⏸ P</button><button class="btn small" id="btnMute2">🔊</button></div>
+</div></div>
+
+<div id="toasts"></div>
+<div id="dpad">
+  <span></span><button data-d="0,-1">▲</button><span></span>
+  <button data-d="-1,0">◀</button><span></span><button data-d="1,0">▶</button>
+  <span></span><button data-d="0,1">▼</button><span></span>
+</div>
+
+<!-- ÉCRAN ACCUEIL -->
+<div class="screen" id="scrHome">
+  <h1 class="logo">NEON SNAKE</h1>
+  <div class="sub">ULTRA COMPLETE EDITION</div>
+  <div class="panel" style="text-align:center">
+    <div id="resumeSlot"></div>
+    <div class="row"><button class="btn primary" id="btnPlay">▶ JOUER</button></div>
+    <div class="row">
+      <button class="btn" id="btnAch">🏆 Réussites</button>
+      <button class="btn" id="btnSkins">🎨 Skins</button>
+      <button class="btn" id="btnScores">📊 Scores</button>
+      <button class="btn" id="btnSet">⚙ Réglages</button>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="btn small" id="btnMute">🔊 Son</button>
+      <span class="label" id="achCount">0/0 réussites</span><span class="label">v1.0</span></div>
+  </div>
+</div>
+
+<!-- SÉLECTION MODE -->
+<div class="screen hidden" id="scrModes">
+  <div class="panel">
+    <h2>MODE DE JEU</h2>
+    <div id="modeList"></div>
+    <div class="setRow"><span class="label">DIFFICULTÉ</span>
+      <div class="row" id="diffRow"></div></div>
+    <div class="row"><button class="btn" data-back>← Retour</button></div>
+  </div>
+</div>
+
+<!-- SÉLECTION NIVEAU AVENTURE -->
+<div class="screen hidden" id="scrLevels">
+  <div class="panel">
+    <h2>AVENTURE — 15 NIVEAUX</h2>
+    <div class="grid2" id="levelGrid"></div>
+    <div class="row"><button class="btn" data-back>← Retour</button></div>
+  </div>
+</div>
+
+<!-- PAUSE -->
+<div class="screen hidden" id="scrPause">
+  <div class="panel" style="text-align:center">
+    <h2>⏸ PAUSE</h2>
+    <div class="row"><button class="btn primary" id="btnResume">Reprendre</button>
+      <button class="btn" id="btnRestartP">Recommencer (R)</button>
+      <button class="btn danger" id="btnQuitP">Quitter</button></div>
+    <div class="row"><button class="btn small" id="btnMute3">🔊 Son</button></div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="screen hidden" id="scrOver">
+  <div class="panel">
+    <h2 id="overTitle">GAME OVER</h2>
+    <div id="overStats" class="statGrid"></div>
+    <h2 style="font-size:1em;margin-top:8px">MEILLEURS SCORES</h2>
+    <table class="hs" id="overHs"></table>
+    <div class="row"><button class="btn primary" id="btnAgain">↻ Rejouer (R)</button>
+      <button class="btn" id="btnMenu">☰ Menu</button></div>
+  </div>
+</div>
+
+<!-- VICTOIRE AVENTURE -->
+<div class="screen hidden" id="scrWin">
+  <div class="panel" style="text-align:center">
+    <h2>🏆 NIVEAU TERMINÉ !</h2>
+    <div id="winStats" class="statGrid" style="text-align:left"></div>
+    <div class="row"><button class="btn primary" id="btnNextLvl">Niveau suivant →</button>
+      <button class="btn" id="btnMenu2">Menu</button></div>
+  </div>
+</div>
+
+<!-- RÉUSSITES -->
+<div class="screen hidden" id="scrAch">
+  <div class="panel">
+    <h2>🏆 RÉUSSITES</h2>
+    <div class="scroll" id="achList"></div>
+    <div class="row"><button class="btn" data-back>← Retour</button></div>
+  </div>
+</div>
+
+<!-- SKINS -->
+<div class="screen hidden" id="scrSkins">
+  <div class="panel">
+    <h2>🎨 SKINS</h2>
+    <div id="skinList" class="row" style="justify-content:flex-start"></div>
+    <div class="row"><button class="btn" data-back>← Retour</button></div>
+  </div>
+</div>
+
+<!-- SCORES -->
+<div class="screen hidden" id="scrScores">
+  <div class="panel">
+    <h2>📊 MEILLEURS SCORES</h2>
+    <div class="row" id="scoreTabs"></div>
+    <table class="hs" id="scoreTab"></table>
+    <div class="row"><button class="btn" data-back>← Retour</button>
+      <button class="btn danger small" id="btnWipe">Effacer les scores</button></div>
+  </div>
+</div>
+
+<!-- RÉGLAGES -->
+<div class="screen hidden" id="scrSet">
+  <div class="panel">
+    <h2>⚙ RÉGLAGES</h2>
+    <div class="setRow"><span>Volume</span><input type="range" id="sVol" min="0" max="100" value="70"></div>
+    <div class="setRow"><span>Musique de fond</span><input type="checkbox" id="sMusic" checked></div>
+    <div class="setRow"><span>Vitesse de base <span id="sSpeedV">100%</span></span><input type="range" id="sSpeed" min="60" max="220" value="100"></div>
+    <div class="setRow"><span>Grille</span><select id="sGrid">
+      <option value="20x15">Petite (20×15)</option><option value="28x21" selected>Normale (28×21)</option>
+      <option value="36x27">Grande (36×27)</option><option value="44x33">Énorme (44×33)</option></select></div>
+    <div class="setRow"><span>Palette</span><select id="sPal">
+      <option value="cyan">Cyan Néon</option><option value="sunset">Sunset</option>
+      <option value="matrix">Matrix</option><option value="ice">Ice</option><option value="vapor">Vaporwave</option></select></div>
+    <div class="setRow"><span>Mode low-spec (moins d'effets)</span><input type="checkbox" id="sLow"></div>
+    <div class="setRow"><span>D-pad tactile (mobile)</span><input type="checkbox" id="sDpad"></div>
+    <h2 style="font-size:.9em;margin-top:10px">CONTRÔLES JOUEUR 1</h2>
+    <div id="keyBind" class="row" style="justify-content:flex-start"></div>
+    <div class="row"><button class="btn" data-back>← Retour</button><button class="btn danger small" id="btnResetKeys">Réinitialiser</button></div>
+  </div>
+</div>
+
+<!-- MULTIJOUER sous-mode -->
+<div class="screen hidden" id="scrVs">
+  <div class="panel" style="text-align:center">
+    <h2>MULTIJOUER LOCAL</h2>
+    <div class="row">
+      <button class="btn sel" id="vsDuel">⚔ Duel</button>
+      <button class="btn" id="vsCoop">🤝 Coop</button>
+    </div>
+    <div class="sub" id="vsDesc" style="margin-top:14px">Duel : le premier serpent qui meurt a perdu. J1 = ZQSD / J2 = Flèches.</div>
+    <div class="row"><button class="btn" data-back>← Retour</button><button class="btn primary" id="btnVsGo">▶ GO</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   NEON SNAKE — Jeu complet en un seul fichier.
+   Modules : SaveManager, AudioEngine, InputManager, ParticleSystem,
+   EntityManager (FoodTypes/Snake), Renderer, GameEngine, UIManager.
+   Logique déterministe sur tick fixe ; rendu interpolé via rAF.
+   ================================================================ */
+
+/* ============ MODULE SaveManager (localStorage) ============ */
+const SaveManager = (() => {
+  const K = "neonsnake_v1_";
+  const load = (k, d) => { try{ const v = localStorage.getItem(K+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } };
+  const save = (k, v) => { try{ localStorage.setItem(K+k, JSON.stringify(v)); }catch(e){} };
+  return {
+    getSettings(){ return Object.assign({vol:.7, music:true, speed:100, grid:"28x21", pal:"cyan", low:false, dpad:false,
+      keys:{up:"KeyZ",down:"KeyS",left:"KeyQ",right:"KeyD"}}, load("settings",{})); },
+    saveSettings(s){ save("settings", s); },
+    getProgress(){ return Object.assign({unlockedModes:["classic","unlimited","adventure"], advLevel:1,
+      achievements:[], skin:"neon"}, load("progress",{})); },
+    saveProgress(p){ save("progress", p); },
+    getScores(){ return load("scores", {}); },
+    addScore(mode, entry, max=10){
+      const all = this.getScores(); const arr = all[mode] || [];
+      arr.push(entry); arr.sort((a,b)=>b.score-a.score); all[mode] = arr.slice(0,max);
+      const rank = all[mode].indexOf(entry);
+      save("scores", all); return rank;
+    },
+    getResume(){ return load("resume", null); },
+    saveResume(st){ st ? save("resume", st) : localStorage.removeItem(K+"resume"); },
+    wipeScores(){ localStorage.removeItem(K+"scores"); }
+  };
+})();
+
+/* ============ MODULE AudioEngine (Web Audio procédural) ============ */
+const AudioEngine = (() => {
+  let ctx = null, master = null, musGain = null, muted = false, vol = .7;
+  let musicOn = true, musTimer = null, step = 0;
+  function ensure(){
+    if (ctx) return true;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = muted ? 0 : vol; master.connect(ctx.destination);
+      musGain = ctx.createGain(); musGain.gain.value = .35; musGain.connect(master);
+      return true;
+    } catch(e){ return false; }
+  }
+  // Bip générique : oscillateur + enveloppe exponentielle
+  function beep(f0, f1, dur, type, g, dest){
+    if(!ensure()) return; if (ctx.state === "suspended") ctx.resume();
+    const o = ctx.createOscillator(), gn = ctx.createGain(), t = ctx.currentTime;
+    o.type = type || "sine"; o.frequency.setValueAtTime(f0, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(f1,1), t+dur);
+    gn.gain.setValueAtTime(g || .25, t); gn.gain.exponentialRampToValueAtTime(.001, t+dur);
+    o.connect(gn); gn.connect(dest || master); o.start(t); o.stop(t+dur+.02);
+  }
+  // Bruit blanc filtré (explosions)
+  function noise(dur, g, low){
+    if(!ensure()) return; const t = ctx.currentTime, n = (ctx.sampleRate*dur)|0;
+    const buf = ctx.createBuffer(1,n,ctx.sampleRate), d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = (Math.random()*2-1)*(1-i/n);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value = low||800;
+    const gn = ctx.createGain(); gn.gain.value = g||.3;
+    src.connect(f); f.connect(gn); gn.connect(master); src.start();
+  }
+  const api = {
+    ctxOK: ensure,
+    setVolume(v){ vol = v; if (master) master.gain.value = muted?0:v; },
+    setMuted(m){ muted = m; ensure(); if (master) master.gain.setTargetAtTime(m?0:vol, ctx.currentTime, .02); },
+    setMusic(on){ musicOn = on; on ? api.startMusic() : api.stopMusic(); },
+    eat(){ beep(520, 880, .12, "square", .18); },
+    golden(){ beep(660,1320,.2,"triangle",.25); setTimeout(()=>beep(880,1760,.18,"triangle",.22),90); },
+    ghost(){ beep(300,150,.3,"sine",.2); },
+    speed(){ beep(440,1200,.15,"sawtooth",.15); },
+    potion(){ [380,500,640,820].forEach((f,i)=>setTimeout(()=>beep(f,f*1.3,.1,"triangle",.18), i*70)); },
+    bomb(){ noise(.5,.5,300); beep(120,40,.4,"sawtooth",.3); },
+    powerup(){ beep(300,900,.25,"triangle",.2); },
+    die(){ noise(.7,.45,500); beep(220,40,.7,"sawtooth",.3); },
+    tick(){ beep(880,880,.03,"square",.05); },
+    ui(){ beep(600,900,.06,"square",.1); },
+    ach(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,f,.15,"triangle",.2), i*90)); },
+    win(){ [523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,f*1.2,.2,"triangle",.22), i*110)); },
+    // Musique : arpège procédural en La mineur, basse + voix de tête clairsemée
+    startMusic(){
+      if (!musicOn || !ensure() || musTimer) return;
+      if (ctx.state === "suspended") ctx.resume();
+      const scale = [110,130.8,164.8,220,261.6,329.6,440];
+      const bassPat = [0,0,3,0, 4,4,2,0];
+      musTimer = setInterval(()=>{
+        if (muted || !musicOn) return;
+        const b = bassPat[step%8];
+        beep(scale[b], 0, .22, "triangle", .10, musGain);
+        if (step%2===0) beep(scale[(step*3)%7]*2, 0, .1, "square", .035, musGain);
+        if (step%8===4) beep(scale[5]*2, 0, .3, "sine", .05, musGain);
+        step++;
+      }, 250);
+    },
+    stopMusic(){ if (musTimer){ clearInterval(musTimer); musTimer = null; } },
+    get muted(){ return muted; }
+  };
+  return api;
+})();
+
+/* ============ MODULE InputManager (clavier, tactile, gamepad) ============ */
+const InputManager = (() => {
+  const listeners = [];
+  let customKeys = {up:"KeyZ",down:"KeyS",left:"KeyQ",right:"KeyD"};
+  let bindCb = null;
+  document.addEventListener("keydown", e => {
+    if (bindCb){ bindCb(e.code); e.preventDefault(); return; }
+    listeners.forEach(f => f(e));
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+  });
+  // Touch : swipe sur le canvas
+  let tsX=0, tsY=0, swiped=false;
+  const cv = document.getElementById("canvas");
+  cv.addEventListener("touchstart", e => { tsX=e.touches[0].clientX; tsY=e.touches[0].clientY; swiped=false; }, {passive:true});
+  cv.addEventListener("touchmove", e => {
+    if (swiped) return;
+    const dx = e.touches[0].clientX - tsX, dy = e.touches[0].clientY - tsY;
+    if (Math.hypot(dx,dy) > 28){
+      swiped = true;
+      const dir = Math.abs(dx)>Math.abs(dy) ? (dx>0?[1,0]:[-1,0]) : (dy>0?[0,1]:[0,-1]);
+      listeners.forEach(f => f({code:"SWIPE_"+dir[0]+"_"+dir[1]}));
+    }
+  }, {passive:true});
+  return {
+    onKey(f){ listeners.push(f); },
+    setKeys(k){ customKeys = k; },
+    bindNextKey(cb){ bindCb = cb; setTimeout(()=>{bindCb=null;},4000); },
+    // J1 = touches personnalisées (+ flèches en solo), J2 = flèches en versus
+    dirFrom(code, player){
+      if (code.startsWith("SWIPE_")){
+        const p = code.slice(6).split("_").map(Number);
+        return player === 2 ? null : p;
+      }
+      if (player === 2){
+        if (code==="ArrowUp") return [0,-1]; if (code==="ArrowDown") return [0,1];
+        if (code==="ArrowLeft") return [-1,0]; if (code==="ArrowRight") return [1,0];
+        return null;
+      }
+      const K = customKeys;
+      if (code===K.up) return [0,-1]; if (code===K.down) return [0,1];
+      if (code===K.left) return [-1,0]; if (code===K.right) return [1,0];
+      // flèches = repli J1 uniquement quand il n'y a pas de 2e joueur humain
+      if (typeof GameEngine !== "undefined" && GameEngine.mode === "versus") return null;
+      if (code==="ArrowUp") return [0,-1]; if (code==="ArrowDown") return [0,1];
+      if (code==="ArrowLeft") return [-1,0]; if (code==="ArrowRight") return [1,0];
+      return null;
+    },
+    // Gamepad (optionnel) : axes et croix directionnelle
+    pollGamepad(){
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const gp of gps){
+        if (!gp) continue;
+        const ax = gp.axes[0]||0, ay = gp.axes[1]||0;
+        if (Math.abs(ax) > .5 || Math.abs(ay) > .5)
+          return Math.abs(ax) > Math.abs(ay) ? [ax>0?1:-1,0] : [0,ay>0?1:-1];
+        const b = i => gp.buttons[i] && gp.buttons[i].pressed;
+        if (b(12)) return [0,-1]; if (b(13)) return [0,1];
+        if (b(14)) return [-1,0]; if (b(15)) return [1,0];
+      }
+      return null;
+    }
+  };
+})();
+
+/* ============ MODULE ParticleSystem (nettoyage mémoire capé) ============ */
+class ParticleSystem {
+  constructor(){ this.parts = []; this.effects = true; }
+  emit(x, y, color, n, spd, life){
+    n = n||14; spd = spd||3.2; life = life||.7;
+    if (!this.effects) n = Math.min(n, 6);
+    for (let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2, s = (Math.random()*.8+.4)*spd;
+      this.parts.push({x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+        life, max:life, color, size:Math.random()*3+1.4});
+    }
+  }
+  explosion(x, y, colors, n){
+    n = n||60; if (!this.effects) n = 24;
+    for (let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2, s = Math.random()*7+1;
+      this.parts.push({x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+        life:.9+Math.random()*.6, max:1.4, color:colors[i%colors.length], size:Math.random()*4+2});
+    }
+  }
+  update(dt){
+    for (let i=this.parts.length-1;i>=0;i--){
+      const p = this.parts[i];
+      p.x += p.vx*dt*60; p.y += p.vy*dt*60; p.vx*=.97; p.vy*=.97; p.life -= dt;
+      if (p.life <= 0) this.parts.splice(i,1);
+    }
+    if (this.parts.length > 900) this.parts.splice(0, this.parts.length-900);
+  }
+  clear(){ this.parts.length = 0; }
+}
+
+/* ============ MODULE EntityManager ============ */
+// Types de nourriture : classique, doré (x5, chronométré), fantôme (wall-hack),
+// vitesse, bombe, potions (rétrécir / ralenti / bouclier / aimant)
+const FoodTypes = {
+  normal : {ch:"●", col:"#0f0", pts:10, grow:1, snd:"eat"},
+  golden : {ch:"★", col:"#ffd700", pts:50, grow:2, ttl:9, snd:"golden"},
+  ghost  : {ch:"◈", col:"#9df", pts:20, grow:1, ttl:10, fx:"ghost", snd:"ghost"},
+  speed  : {ch:"»", col:"#f80", pts:15, grow:1, ttl:8, fx:"speed", snd:"speed"},
+  bomb   : {ch:"✹", col:"#f44", pts:0, grow:0, snd:"bomb"},
+  shrink : {ch:"◧", col:"#c9f", pts:30, grow:-4, snd:"potion"},
+  slowmo : {ch:"◔", col:"#8ef", pts:25, grow:1, fx:"slowmo", snd:"potion"},
+  shield : {ch:"⛨", col:"#0ff", pts:25, grow:1, fx:"shield", snd:"potion"},
+  magnet : {ch:"◎", col:"#fa0", pts:25, grow:1, fx:"magnet", snd:"potion"},
+};
+const FX_DURATION = {speed:7, ghost:9, slowmo:6, shield:10, magnet:8};
+class Snake {
+  constructor(id, skin, isAI, aiLevel){
+    this.id = id; this.skin = skin; this.isAI = !!isAI; this.aiLevel = aiLevel||0;
+    this.cells = []; this.prevCells = []; this.dir = [1,0];
+    this.queue = []; this.growth = 0; this.alive = true;
+    this.score = 0; this.fruits = 0; this.specials = 0;
+    this.combo = 0; this.maxCombo = 0; this.lastEat = -99;
+    this.bombs = 0; this.fx = {shield:0, ghost:0, speed:0, slowmo:0, magnet:0};
+    this.trail = []; this.trailT = 0; this.p2 = false;
+    this.acc = 0; this.stepMs = 125;
+  }
+  place(x, y, dir){
+    this.dir = dir;
+    this.cells = [{x,y},{x:x-dir[0],y:y-dir[1]},{x:x-2*dir[0],y:y-2*dir[1]}];
+    this.prevCells = this.cells.map(c=>({...c}));
+    this.trail = []; this.alive = true; this.queue = [];
+  }
+  get head(){ return this.cells[0]; }
+  get len(){ return this.cells.length; }
+}
+
+/* ============ Palettes & Skins ============ */
+const Palettes = {
+  cyan  : {bg0:"#07041a", bg1:"#0d1035", grid:"rgba(0,255,255,.06)", wall:"#241a4d", wallGlow:"#66f"},
+  sunset: {bg0:"#1a0620", bg1:"#2d0f10", grid:"rgba(255,120,0,.07)", wall:"#3d1440", wallGlow:"#f6a"},
+  matrix: {bg0:"#00160a", bg1:"#022a10", grid:"rgba(0,255,60,.08)",  wall:"#0a3018", wallGlow:"#4f6"},
+  ice   : {bg0:"#04121f", bg1:"#08304d", grid:"rgba(180,230,255,.08)", wall:"#123a5c", wallGlow:"#9df"},
+  vapor : {bg0:"#1c0a3a", bg1:"#3a0f52", grid:"rgba(255,0,255,.07)", wall:"#38156b", wallGlow:"#a6f"},
+};
+const Skins = {
+  neon    : {name:"Néon",    c1:"#00ffcc", c2:"#0033cc", need:null},
+  magma   : {name:"Magma",   c1:"#ff3300", c2:"#660000", need:{ach:"veteran", show:"5 000 pts cumulés"}},
+  toxic   : {name:"Toxic",   c1:"#aaff00", c2:"#006622", need:{ach:"combo10", show:"Combo x10"}},
+  ice     : {name:"Ice",     c1:"#99eeff", c2:"#0044aa", need:{ach:"survivor2", show:"Survivre 2 min"}},
+  royal   : {name:"Royal",   c1:"#ffee00", c2:"#aa00aa", need:{ach:"golden5", show:"5 fruits dorés"}},
+  phantom : {name:"Phantom", c1:"#ccccff", c2:"#333366", need:{ach:"ghostwalker", show:"Manger un fruit fantôme"}},
+  rainbow : {name:"Rainbow", c1:"#ff0080", c2:"#00ccff", need:{ach:"adventureDone", show:"Finir l'aventure"}},
+  gold    : {name:"Or Pur",  c1:"#ffd700", c2:"#8a6d00", need:{ach:"score1000", show:"1 000 pts en 1 partie"}},
+  void    : {name:"Vide",    c1:"#7722aa", c2:"#110022", need:{ach:"pacifist", show:"5 parties sans bombe"}},
+};
+
+/* ============ Réussites (26) ============ */
+const ACHIEVEMENTS = [
+  {id:"first",   ico:"🍎", name:"Premier fruit",   desc:"Manger votre premier fruit"},
+  {id:"ten",     ico:"😋", name:"Appétit d'ogre",   desc:"Manger 10 fruits en une partie"},
+  {id:"len10",   ico:"💯", name:"Sans faiblir",     desc:"Atteindre une longueur de 10"},
+  {id:"len25",   ico:"📏", name:"Long et fort",     desc:"Atteindre une longueur de 25"},
+  {id:"len50",   ico:"🐲", name:"Dragon",            desc:"Atteindre une longueur de 50"},
+  {id:"len100",  ico:"👑", name:"Centurion",         desc:"Atteindre une longueur de 100"},
+  {id:"combo5",  ico:"⚡", name:"Combo x5",          desc:"Enchaîner un combo x5"},
+  {id:"combo10", ico:"🔥", name:"Combo x10",         desc:"Enchaîner un combo x10"},
+  {id:"golden",  ico:"⭐", name:"Étoile filante",    desc:"Manger un fruit doré"},
+  {id:"golden5", ico:"🌟", name:"Chasseur d'étoiles", desc:"Manger 5 fruits dorés (cumulé)"},
+  {id:"ghostwalker", ico:"👻", name:"Fantôme",       desc:"Manger un fruit fantôme"},
+  {id:"shielded", ico:"🛡", name:"Rien ne me traverse", desc:"Obtenir un bouclier"},
+  {id:"bomb",     ico:"💥", name:"Ça pique...",     desc:"Manger une bombe par erreur"},
+  {id:"bombsurvivor", ico:"☢", name:"Coup de bol",  desc:"Survivre à une bombe grâce au bouclier"},
+  {id:"survivor1", ico:"⏱", name:"Une minute",      desc:"Survivre 60 secondes"},
+  {id:"survivor2", ico:"🕰", name:"Deux minutes",    desc:"Survivre 120 secondes"},
+  {id:"score500",  ico:"🎖", name:"Club des 500",    desc:"Faire 500 points en une partie"},
+  {id:"score1000", ico:"💎", name:"Mille points",   desc:"Faire 1 000 points en une partie"},
+  {id:"veteran",   ico:"🏹", name:"Vétéran",         desc:"5 000 points cumulés"},
+  {id:"killer",    ico:"⚔", name:"Chasseur",        desc:"Éliminer un serpent IA"},
+  {id:"multi",     ico:"👥", name:"En duo",          desc:"Jouer une partie multijoueur"},
+  {id:"brave",     ico:"🏟", name:"Battle Royale",   desc:"Gagner une Battle Royale"},
+  {id:"adv5",      ico:"🗺", name:"Explorateur",     desc:"Terminer 5 niveaux d'aventure"},
+  {id:"adventureDone", ico:"🏆", name:"Légende vivante", desc:"Finir l'aventure (15 niveaux)"},
+  {id:"pacifist",  ico:"☮", name:"Pacifiste",       desc:"5 parties sans manger de bombe"},
+  {id:"shrinker",  ico:"🗜", name:"Régime",          desc:"Boire 3 potions rétrécissantes"},
+];
+
+/* ============ Difficultés ============ */
+const DIFFS = [
+  {id:"easy",   name:"Facile",    dstep:1.45, aiBoost:1.3,  obst:.6},
+  {id:"normal", name:"Normal",   dstep:1.0,  aiBoost:1.0,  obst:1},
+  {id:"hard",   name:"Difficile",dstep:.82,  aiBoost:.78,  obst:1.4},
+  {id:"night",  name:"Cauchemar",dstep:.65,  aiBoost:.62,  obst:1.9},
+];
+
+/* ============ Niveaux d'aventure (15, objectifs variés) ============ */
+function levelCfg(i){
+  const L = [
+    {name:"Éveil",        obj:{t:"fruits", v:8},  walls:[[8,9,2,4],[18,8,2,4]]},
+    {name:"Couloirs",     obj:{t:"fruits", v:10}, walls:[[0,7,13,1],[15,14,13,1]]},
+    {name:"Chrono 30",    obj:{t:"survive", v:30}, walls:[[13,7,2,7]], speed:1.15},
+    {name:"Portails",     obj:{t:"fruits", v:12}, walls:[[6,5,3,3],[19,13,3,3]], portals:true},
+    {name:"Ceinture",     obj:{t:"len", v:18},    walls:[[3,3,22,1],[3,17,22,1]]},
+    {name:"Chasseur",     obj:{t:"fruits", v:10}, walls:[[9,4,2,3],[17,14,2,3]], ai:1},
+    {name:"Portes",       obj:{t:"fruits", v:12}, walls:[], doors:true},
+    {name:"Murs mobiles", obj:{t:"survive", v:40}, walls:[], moving:2},
+    {name:"Duel",         obj:{t:"fruits", v:12}, walls:[[],[12,9,4,2]][1], ai:2},
+    {name:"Zigzag",       obj:{t:"score", v:350}, walls:[[5,5,3,3],[20,13,3,3],[5,13,3,3],[20,5,3,3]]},
+    {name:"Spécial 5",    obj:{t:"special", v:5}, walls:[[9,8,10,1],[9,12,10,1]], portals:true},
+    {name:"Rival",        obj:{t:"fruits", v:15}, walls:[[12,9,4,3]], ai:3},
+    {name:"Chaos",        obj:{t:"survive", v:50}, walls:[[7,7,2,2],[19,12,2,2]], moving:3, speed:1.15},
+    {name:"Arène",        obj:{t:"score", v:500}, walls:[[0,10,9,1],[19,10,9,1]], ai:2, portals:true, doors:true},
+    {name:"Serpent-Roi",  obj:{t:"len", v:40},    walls:[[13,8,2,6],[8,3,4,1],[16,17,4,1], [8,17,4,1],[16,3,4,1]], ai:3, moving:2, speed:1.1},
+  ];
+  const c = L[i-1] || L[0];
+  return Object.assign({idx:i, speed:1, walls:[], portals:false, doors:false, moving:0, ai:0}, c);
+}
+
+/* ============ Outils couleur ============ */
+function hex2rgb(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+function blend(h1, h2, k){
+  const a = hex2rgb(h1), b = hex2rgb(h2);
+  return "rgb("+((a[0]+(b[0]-a[0])*k)|0)+","+((a[1]+(b[1]-a[1])*k)|0)+","+((a[2]+(b[2]-a[2])*k)|0)+")";
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+/* ============ MODULE Renderer (Canvas 2D, DPR, interpolation) ============ */
+class Renderer {
+  constructor(cv){
+    this.cv = cv; this.ctx = cv.getContext("2d");
+    this.dpr = 1; this.cell = 20; this.bgStars = null;
+    window.addEventListener("resize", () => this.resize());
+    this.resize();
+  }
+  resize(){
+    const gc = GameEngine.grid;
+    const availW = window.innerWidth - 24, availH = window.innerHeight - 110;
+    this.cell = Math.max(9, Math.floor(Math.min(availW/gc.cols, availH/gc.rows)));
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.cv.width = gc.cols*this.cell*this.dpr; this.cv.height = gc.rows*this.cell*this.dpr;
+    this.cv.style.width = (gc.cols*this.cell)+"px"; this.cv.style.height = (gc.rows*this.cell)+"px";
+    this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+    this.bgStars = null;
+  }
+  get W(){ return this.cv.width/this.dpr; }
+  get H(){ return this.cv.height/this.dpr; }
+  buildStars(){
+    const ge = GameEngine, pal = Palettes[ge.settings.pal];
+    const n = ge.settings.low ? 20 : 60;
+    this.bgStars = [];
+    for (let i=0;i<n;i++) this.bgStars.push({x:Math.random()*this.W, y:Math.random()*this.H,
+      z:.3+Math.random()*.7, s:.5+Math.random()*1.6, layer:Math.random()<.5?0:1});
+  }
+  draw(t, time){
+    const ctx = this.ctx, ge = GameEngine, g = ge.grid, C = this.cell;
+    const pal = Palettes[ge.settings.pal];
+    ctx.save();
+    if (ge.shake > 0) ctx.translate((Math.random()-.5)*ge.shake, (Math.random()-.5)*ge.shake);
+    // fond + parallaxe discret
+    const grd = ctx.createLinearGradient(0,0,0,this.H);
+    grd.addColorStop(0, pal.bg0); grd.addColorStop(1, pal.bg1);
+    ctx.fillStyle = grd; ctx.fillRect(-14,-14,this.W+28,this.H+28);
+    if (!this.bgStars) this.buildStars();
+    if (!ge.settings.low){
+      for (const st of this.bgStars){
+        st.y += st.z * (st.layer ? .05 : .14);
+        if (st.y > this.H){ st.y = -2; st.x = Math.random()*this.W; }
+        ctx.globalAlpha = .12 + st.z*.22*(0.7+0.3*Math.sin(time*.002+st.x));
+        ctx.fillStyle = st.layer ? "#5af" : "#f6f";
+        ctx.fillRect(st.x, st.y, st.s, st.s);
+      }
+      ctx.globalAlpha = 1;
+    }
+    // grille subtile
+    ctx.strokeStyle = pal.grid; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x=1;x<g.cols;x++){ ctx.moveTo(x*C+.5,0); ctx.lineTo(x*C+.5,this.H); }
+    for (let y=1;y<g.rows;y++){ ctx.moveTo(0,y*C+.5); ctx.lineTo(this.W,y*C+.5); }
+    ctx.stroke();
+    this.drawObstacles(ctx, C, time);
+    this.drawPortals(ctx, C, time);
+    this.drawFoods(ctx, C, time);
+    for (const s of ge.snakes) if (s.alive) this.drawSnake(ctx, s, C, t, time);
+    for (const p of ge.particles.parts){
+      ctx.globalAlpha = Math.max(0, p.life/p.max);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+  drawObstacles(ctx, C, time){
+    const ge = GameEngine, pal = Palettes[ge.settings.pal];
+    for (const o of ge.obstacles){
+      if (o.type === "wall"){
+        ctx.fillStyle = pal.wall;
+        if (!ge.settings.low){ ctx.shadowColor = pal.wallGlow; ctx.shadowBlur = 10; }
+        ctx.fillRect(o.x*C+1, o.y*C+1, o.w*C-2, o.h*C-2);
+        ctx.shadowBlur = 0;
+      } else if (o.type === "door"){
+        const open = o.isOpen(ge.elapsed);
+        ctx.fillStyle = open ? "rgba(0,255,180,.16)" : "rgba(255,60,120,.8)";
+        ctx.shadowColor = open ? "#0fa" : "#f3c";
+        ctx.shadowBlur = ge.settings.low ? 0 : 12;
+        if (open){
+          ctx.fillRect(o.x*C+1, o.y*C+1, o.w*C-2, C*.22);
+          ctx.fillRect(o.x*C+1, o.y*C+C*.6, o.w*C-2, C*.22);
+        } else ctx.fillRect(o.x*C+1, o.y*C+1, (o.w*C-2), C-2);
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+  drawPortals(ctx, C, time){
+    for (const p of GameEngine.portals){
+      const puls = .5+.5*Math.sin(time*.005+p.x);
+      const col = p.id%2 ? "#f0f" : "#0ff";
+      ctx.strokeStyle = col; ctx.lineWidth = 3;
+      ctx.shadowColor = col; ctx.shadowBlur = GameEngine.settings.low ? 0 : 18*puls;
+      ctx.beginPath();
+      ctx.ellipse(p.x*C+C/2, p.y*C+C/2, C*.42*(0.85+0.15*puls), C*.42*(0.85+0.15*puls), time*.001, 0, Math.PI*2);
+      ctx.stroke(); ctx.shadowBlur = 0;
+    }
+  }
+  drawFoods(ctx, C, time){
+    const ge = GameEngine;
+    for (const f of ge.foods){
+      const def = FoodTypes[f.type], cx = f.x*C+C/2, cy = f.y*C+C/2;
+      const puls = .7 + .3*Math.sin(time*.006 + f.x*3 + f.y);
+      ctx.save();
+      ctx.font = ((C*.8)|0)+"px serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.shadowColor = def.col; ctx.shadowBlur = ge.settings.low ? 0 : 14*puls;
+      ctx.fillStyle = def.col;
+      ctx.fillText(def.ch, cx, cy+1);
+      if (f.ttl !== undefined){ // barre de vie visuelle des fruits temporaires
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(cx-C*.45, cy+C*.5, C*.9, 3);
+        ctx.fillStyle = def.col;
+        ctx.fillRect(cx-C*.45, cy+C*.5, C*.9*Math.max(0, f.ttl/f.ttlMax), 3);
+      }
+      ctx.restore();
+    }
+  }
+  drawSnake(ctx, s, C, t, time){
+    const ge = GameEngine, sk = Skins[s.skin] || Skins.neon, n = s.cells.length;
+    // positions interpolées entre le tick précédent et le courant (mouvement fluide)
+    const pts = [];
+    for (let i=0;i<n;i++){
+      const c = s.cells[i], p = s.prevCells[Math.min(i, s.prevCells.length-1)] || c;
+      pts.push({x:(p.x+(c.x-p.x)*t), y:(p.y+(c.y-p.y)*t)});
+    }
+    const headPx = pts[0].x*C+C/2, headPy = pts[0].y*C+C/2;
+    // traînée derrière la tête
+    if (!ge.settings.low){
+      for (let i=0;i<s.trail.length;i++){
+        const tp = s.trail[i], a = (i+1)/s.trail.length*.22;
+        ctx.globalAlpha = a; ctx.fillStyle = sk.c1;
+        ctx.fillRect(tp.x*C+C*.2, tp.y*C+C*.2, C*.6, C*.6);
+      }
+      ctx.globalAlpha = 1;
+    }
+    // effets power-ups distincts : auras
+    if (!ge.settings.low){
+      if (s.fx.shield > 0){
+        ctx.strokeStyle = "#0ff"; ctx.lineWidth=2; ctx.globalAlpha=.5+.3*Math.sin(time*.01);
+        ctx.shadowColor="#0ff"; ctx.shadowBlur=16;
+        ctx.beginPath(); ctx.arc(headPx, headPy, C*1.05, 0, Math.PI*2); ctx.stroke();
+        ctx.shadowBlur=0; ctx.globalAlpha=1;
+      }
+      if (s.fx.speed > 0){
+        ctx.strokeStyle = "#f80"; ctx.lineWidth=2; ctx.globalAlpha=.45;
+        const r = C*1.3+3*Math.sin(time*.02);
+        ctx.beginPath(); ctx.arc(headPx, headPy, r, -0.6, 0.6); ctx.stroke();
+        ctx.beginPath(); ctx.arc(headPx, headPy, r, Math.PI-0.6, Math.PI+0.6); ctx.stroke();
+        ctx.globalAlpha=1;
+      }
+      if (s.fx.magnet > 0){
+        ctx.strokeStyle = "#fa0"; ctx.globalAlpha=.3; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+        ctx.beginPath(); ctx.arc(headPx, headPy, C*4.5, 0, Math.PI*2); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha=1;
+      }
+      if (s.fx.ghost > 0) ctx.globalAlpha = .5+.2*Math.sin(time*.008);
+      if (s.fx.slowmo > 0){
+        ctx.strokeStyle="#8ef"; ctx.globalAlpha=.35; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(headPx, headPy, C*1.6, time*.003, time*.003+Math.PI); ctx.stroke();
+        ctx.globalAlpha=1;
+      }
+    }
+    // corps : dégradé de la tête vers la queue
+    for (let i=n-1;i>=0;i--){
+      const k = i/Math.max(1,n-1);
+      const col = i===0 ? blend(sk.c1, "#ffffff", .35) : blend(sk.c1, sk.c2, k);
+      ctx.fillStyle = col;
+      if (!ge.settings.low){ ctx.shadowColor = sk.c1; ctx.shadowBlur = i===0?14:6; }
+      const pad = i===0 ? 1 : 2.2;
+      roundRect(ctx, pts[i].x*C+pad, pts[i].y*C+pad, C-pad*2, C-pad*2, i===0 ? C*.3 : C*.32);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    // queue effilée animée
+    if (n >= 2){
+      const tail = pts[n-1], prev = pts[n-2];
+      const tx = tail.x + (prev.x-tail.x)*.45, ty = tail.y + (prev.y-tail.y)*.45;
+      ctx.fillStyle = sk.c2;
+      ctx.beginPath(); ctx.arc(tx*C+C/2, ty*C+C/2, C*.28, 0, Math.PI*2); ctx.fill();
+    }
+    // yeux regardant dans la direction de déplacement
+    const d = s.dir, ex = -d[1], ey = d[0];
+    for (const side of [-1,1]){
+      const px = headPx + d[0]*C*.16 + ex*side*C*.22;
+      const py = headPy + d[1]*C*.16 + ey*side*C*.22;
+      ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(px, py, C*.14, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle="#111"; ctx.beginPath();
+      ctx.arc(px + d[0]*C*.05, py + d[1]*C*.05, C*.065, 0, Math.PI*2); ctx.fill();
+    }
+    // langue animée
+    if (Math.sin(time*.006) > .6 && !ge.settings.low){
+      ctx.strokeStyle="#f26"; ctx.lineWidth=2; ctx.beginPath();
+      ctx.moveTo(headPx+d[0]*C*.4, headPy+d[1]*C*.4);
+      ctx.lineTo(headPx+d[0]*C*.75, headPy+d[1]*C*.75); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ============ MODULE GameEngine (logique, tick déterministe) ============ */
+const GameEngine = {
+  grid: {cols:28, rows:21},
+  state: "menu", mode: "classic", modeMeta: {}, diffIdx: 1, level: 1, levelCfg: null,
+  snakes: [], player: null, foods: [], obstacles: [], portals: [],
+  acc: 0, tickMs: 125, timeScale: 1, elapsed: 0, lastT: 0, shake: 0,
+  particles: new ParticleSystem(), settings: null, progress: null, renderer: null,
+  lifetime: {score:0, golden:0, ghostEaten:0, kills:0, shrinks:0, cleanGames:0},
+  specialPool: ["golden","ghost","speed","bomb","bomb","shrink","slowmo","shield","magnet"],
+  foodTimer: 0, muted: false,
+
+  init(){
+    this.settings = SaveManager.getSettings();
+    this.progress = SaveManager.getProgress();
+    this.applyGrid(this.settings.grid);
+    this.particles.effects = !this.settings.low;
+    this.muted = localStorage.getItem("neonsnake_v1_muted") === "1";
+    this.renderer = new Renderer(document.getElementById("canvas"));
+  },
+  applyGrid(g){ const [c,r] = g.split("x").map(Number); this.grid = {cols:c, rows:r}; },
+  baseStep(){ return 125 * (100/this.settings.speed) * DIFFS[this.diffIdx].dstep; },
+
+  /* ---------- démarrage d'une partie ---------- */
+  start(mode, opt){
+    this.mode = mode; this.modeMeta = opt || {};
+    const d = DIFFS[this.diffIdx], g = this.grid, midY = g.rows>>1;
+    const skin = this.progress.skin;
+    this.tickMs = this.baseStep();
+    this.foods = []; this.obstacles = []; this.portals = []; this.snakes = [];
+    this.acc = 0; this.elapsed = 0; this.timeScale = 1; this.foodTimer = 0; this.shake = 0;
+    this.particles.clear();
+    if (this.diffIdx === 0) this.specialPool = this.specialPool.filter(t => t !== "Bomb");
+    else this.specialPool = ["golden","ghost","speed","bomb","bomb","shrink","slowmo","shield","magnet"];
+
+    const mkP = (id, x, dir, sk) => { const s = new Snake(id, sk, false); s.place(x, midY, dir); return s; };
+    if (mode === "adventure"){
+      this.level = this.modeMeta.level || 1;
+      const cfg = this.levelCfg = levelCfg(this.level);
+      this.tickMs /= (cfg.speed || 1);
+      this.buildAdventureLayout(cfg);
+      const s = mkP(1, 5, [1,0], skin); this.snakes = [s]; this.player = s;
+      if (cfg.ai) this.spawnAI(cfg.ai);
+    } else if (mode === "versus"){
+      const s1 = new Snake(1, skin, false); s1.place(5, midY-3, [1,0]);
+      const s2 = new Snake(2, "magma", false); s2.place(g.cols-6, midY+3, [-1,0]); s2.p2 = true;
+      if (this.modeMeta.coop){ s1.coop = s2.coop = true; }
+      this.snakes = [s1, s2]; this.player = s1;
+      this.ach("multi");
+    } else if (mode === "royale"){
+      const s = mkP(1, 5, [1,0], skin); this.snakes = [s]; this.player = s;
+      const lv = [1,2,3];
+      lv.forEach((l, i) => this.spawnAI(l));
+    } else {
+      if (mode === "classic") this.buildRandomWalls(d.obst);
+      const s = mkP(1, 5, [1,0], skin); this.snakes = [s]; this.player = s;
+    }
+    this.spawnFood("normal");
+    for (let i=0;i<2;i++) if (Math.random() < .8) this.trySpawnSpecial();
+    this.state = "playing";
+    UIManager.showHUD(true);
+    AudioEngine.startMusic();
+    SaveManager.saveResume(null); // nouvelle partie écrase la reprise
+  },
+  buildRandomWalls(factor){
+    const g = this.grid, n = Math.round(1 + factor*2 + Math.random()*2);
+    for (let i=0;i<n;i++){
+      const horiz = Math.random()<.5, len = 2+((Math.random()*4)|0);
+      const w = horiz ? len : 1, h = horiz ? 1 : len;
+      const x = 2+((Math.random()*(g.cols-4-w))|0), y = 2+((Math.random()*(g.rows-4-h))|0);
+      const midY = g.rows>>1;
+      if (y >= midY-2 && y <= midY+2) continue; // couloir de départ dégagé
+      this.obstacles.push({type:"wall", x, y, w, h});
+    }
+  },
+  buildAdventureLayout(cfg){
+    for (const w of (cfg.walls||[])) this.obstacles.push({type:"wall", x:w[0], y:w[1], w:w[2], h:w[3]});
+    if (cfg.portals){
+      const y1 = 2, y2 = this.grid.rows-3;
+      this.portals = [{id:0, x:1, y:y1}, {id:1, x:this.grid.cols-2, y:y1},
+                      {id:2, x:1, y:y2}, {id:3, x:this.grid.cols-2, y:y2}];
+    }
+    if (cfg.doors){
+      const y = this.grid.rows>>1;
+      this.obstacles.push({type:"door", x:8, y, w:2, h:1, period:4, phase:0});
+      this.obstacles.push({type:"door", x:18, y, w:2, h:1, period:4, phase:2});
+    }
+    for (let i=0;i<(cfg.moving||0);i++){
+      this.obstacles.push({type:"wall", x:4+i*8, y:4+(i*5)%10, w:2, h:1,
+        mv:{baseX:4+i*8, baseY:4+(i*5)%10, range:6, speed:.05, phase:i*2}});
+    }
+  },
+  spawnAI(level){
+    const g = this.grid, y = g.rows>>1;
+    const skins = ["toxic","ice","royal","phantom"];
+    const s = new Snake(this.snakes.length+1, skins[this.snakes.length % skins.length], true, level);
+    s.place(g.cols-5, y, [-1,0]);
+    s.stepMs = 125 * (100/this.settings.speed) * DIFFS[this.diffIdx].dstep * DIFFS[this.diffIdx].aiBoost;
+    s.acc = 0;
+    this.snakes.push(s);
+  },
+
+  /* ---------- boucle principale (rAF + accumulateur; tick logique fixe) ---------- */
+  loop(t){
+    requestAnimationFrame(tt => GameEngine.loop(tt));
+    const dt = Math.min(.05, (t - this.lastT)/1000 || 0); this.lastT = t;
+    if (this.state === "playing"){
+      const P = this.player;
+      this.timeScale = (P && P.fx.slowmo > 0) ? .55 : 1;
+      this.elapsed += dt * this.timeScale;
+      const gamepadDir = InputManager.pollGamepad();
+      if (gamepadDir && P && !P.p2) this.queueDir(P, gamepadDir);
+      this.acc += dt*1000*this.timeScale;
+      let guard = 0;
+      while (this.acc >= this.tickMs && guard++ < 6){ this.tick(); this.acc -= this.tickMs; }
+      // serpents IA : cadence indépendante
+      for (const s of this.snakes){
+        if (!s.alive || !s.isAI) continue;
+        s.acc += dt*1000*this.timeScale;
+        let g2 = 0;
+        while (s.acc >= s.stepMs && g2++ < 4){ this.moveAI(s); s.acc -= s.stepMs; }
+      }
+      this.updateFoodTTL(dt);
+      this.updateEffects(dt);
+      this.checkObjectives();
+      UIManager.updateHUD();
+    }
+    this.particles.update(dt);
+    this.shake = Math.max(0, this.shake - dt*18);
+    if (this.state !== "menu"){
+      const interp = this.state === "playing" ? Math.min(1, this.acc/this.tickMs) : 1;
+      this.renderer.draw(interp, t);
+    }
+  },
+  tick(){
+    for (const s of this.snakes){
+      if (!s.alive || s.isAI) continue;
+      while (s.queue.length){ // buffer d'inputs : évite demi-tours et pertes de touche
+        const d = s.queue.shift();
+        if (!(d[0] === -s.dir[0] && d[1] === -s.dir[1]) && !(d[0] === s.dir[0] && d[1] === s.dir[1])){
+          s.dir = d; break;
+        }
+      }
+      this.moveSnake(s, s.head.x + s.dir[0], s.head.y + s.dir[1]);
+    }
+    this.updateMovingWalls();
+  },
+  updateMovingWalls(){
+    for (const o of this.obstacles){
+      if (!o.mv) continue;
+      o.mv.phase += o.mv.speed * (this.tickMs/1000);
+      const horiz = o.w >= o.h;
+      const off = Math.round(Math.sin(o.mv.phase)*o.mv.range);
+      const nx = horiz ? o.mv.baseX + off : o.mv.baseX;
+      const ny = horiz ? o.mv.baseY : o.mv.baseY + off;
+      if (nx === o.x && ny === o.y) continue;
+      // n'écrase pas une tête de serpent vivant
+      let crush = false;
+      for (const s of this.snakes){
+        if (!s.alive) continue;
+        for (const c of s.cells){
+          if (c.x >= Math.min(o.x,nx) - 0 && c.x < Math.max(o.x+o.w, nx+o.w) && c.y >= Math.min(o.y,ny) && c.y < Math.max(o.y+o.h, ny+o.h) + 1){
+            if (c.x >= nx && c.x < nx+o.w && c.y >= ny && c.y < ny+o.h){ crush = true; break; }
+          }
+        }
+        if (crush) break;
+      }
+      if (!crush){ o.x = nx; o.y = ny; }
+    }
+  },
+  isBlocked(x, y){
+    for (const o of this.obstacles){
+      if (o.type === "wall" && x >= o.x && x < o.x+o.w && y >= o.y && y < o.y+o.h) return true;
+      if (o.type === "door" && !o.isOpen(this.elapsed) && x >= o.x && x < o.x+o.w && y >= o.y && y < o.y+o.h) return true;
+    }
+    return false;
+  },
+  wrapCoord(v, max){ return (v%max+max)%max; },
+  /* déplacement : détection précise tête-corps, tête-obstacle, murs, portails, fruits */
+  moveSnake(s, nx, ny){
+    const g = this.grid;
+    const wrap = this.mode === "unlimited" || s.fx.ghost > 0;
+    if (nx < 0 || nx >= g.cols || ny < 0 || ny >= g.rows){
+      if (wrap){ nx = this.wrapCoord(nx, g.cols); ny = this.wrapCoord(ny, g.rows); }
+      else { this.kill(s, "mur"); return; }
+    }
+    // portails de téléportation (appariés 0-1 et 2-3)
+    const pt = this.portals.find(p => p.x===nx && p.y===ny);
+    if (pt){
+      const twinId = pt.id % 2 === 0 ? pt.id+1 : pt.id-1;
+      const twin = this.portals.find(p => p.id === twinId);
+      if (twin && twin !== pt){ nx = twin.x; ny = twin.y; }
+      const C = this.renderer.cell;
+      this.particles.emit(pt.x*C+C/2, pt.y*C+C/2, "#f0f", 10, 2, .5);
+      AudioEngine.tick();
+    }
+    // collision tête-obstacle
+    if (this.isBlocked(nx, ny)){
+      if (s.fx.shield > 0){ s.fx.shield = 0; this.bump(nx, ny); return; }
+      this.kill(s, "obstacle"); return;
+    }
+    // collision tête-corps (soi: à partir du 2e segment ; autres: tous segments)
+    for (const o of this.snakes){
+      if (!o.alive) continue;
+      if (o !== s && this.mode === "versus" && this.modeMeta.coop && o.coop && s.coop && !o.fx.ghost && !s.fx.ghost){
+        continue; // coop : on peut traverser son allié
+      }
+      for (let i=(o===s?1:0); i<o.cells.length; i++){
+        if (o.cells[i].x === nx && o.cells[i].y === ny){
+          if (s.fx.shield > 0){ s.fx.shield = 0; this.bump(nx, ny); return; }
+          this.kill(s, "collision"); return;
+        }
+      }
+    }
+    // avance + mémorise les positions précédentes pour l'interpolation du rendu
+    for (let i=0;i<s.cells.length;i++) s.prevCells[i] = {x:s.cells[i].x, y:s.cells[i].y};
+    s.cells.unshift({x:nx, y:ny});
+    if (s.growth > 0){ s.growth--; s.prevCells.unshift({...s.prevCells[0]}); }
+    else if (s.growth < 0){
+      s.growth++;
+      if (s.cells.length > 3) s.cells.pop(); else s.growth = 0;
+      if (s.cells.length > 3) s.cells.pop(); else s.growth = 0;
+    }
+    else s.cells.pop();
+    s.prevCells.length = s.cells.length;
+    // traînée derrière la tête
+    s.trailT++;
+    if (s.trailT % 2 === 0){ s.trail.unshift({x:nx, y:ny}); if (s.trail.length > 5) s.trail.pop(); }
+    // aimant à fruits : attire les fruits proches
+    if (s.fx.magnet > 0) this.applyMagnet(s);
+    // tête-fruit
+    const fi = this.foods.findIndex(f => f.x === nx && f.y === ny);
+    if (fi >= 0) this.eat(s, fi);
+    if (s.alive) this.checkLenAch(s);
+  },
+  bump(x, y){
+    this.shake = 6; AudioEngine.bomb();
+    const C = this.renderer.cell;
+    this.particles.emit(x*C+C/2, y*C+C/2, "#0ff", 12, 3, .5);
+  },
+  updateFoodTTL(dt){
+    for (let i=this.foods.length-1;i>=0;i--){
+      const f = this.foods[i];
+      if (f.ttl !== undefined){ f.ttl -= dt; if (f.ttl <= 0) this.foods.splice(i,1); }
+    }
+    this.foodTimer += dt * this.timeScale;
+    if (this.foodTimer > 4){ this.foodTimer = 0; this.trySpawnSpecial(); }
+    if (!this.foods.some(f => f.type === "normal")) this.spawnFood("normal");
+  },
+  isOpen(x, y){
+    if (x<0||y<0||x>=this.grid.cols||y>=this.grid.rows) return false;
+    if (this.isBlocked(x,y)) return false;
+    for (const s of this.snakes) for (const c of s.cells) if (c.x===x&&c.y===y) return false;
+    for (const f of this.foods) if (f.x===x&&f.y===y) return false;
+    for (const p of this.portals) if (p.x===x&&p.y===y) return false;
+    return true;
+  },
+  randOpen(){
+    for (let t=0;t<300;t++){
+      const x = (Math.random()*this.grid.cols)|0, y = (Math.random()*this.grid.rows)|0;
+      if (this.isOpen(x,y)) return {x,y};
+    }
+    return null;
+  },
+  spawnFood(type){
+    const pos = this.randOpen(); if (!pos) return;
+    const def = FoodTypes[type];
+    const f = {type, x:pos.x, y:pos.y};
+    if (def.ttl){ f.ttl = def.ttl; f.ttlMax = def.ttl; }
+    this.foods.push(f);
+  },
+  trySpawnSpecial(){
+    if (this.foods.length > 7) return;
+    this.spawnFood(this.specialPool[(Math.random()*this.specialPool.length)|0]);
+  },
+  applyMagnet(s){
+    for (const f of this.foods){
+      if (f.type === "bomb") continue;
+      const d = Math.abs(f.x-s.head.x)+Math.abs(f.y-s.head.y);
+      if (d <= 4 && d > 0){
+        const nx = f.x+Math.sign(s.head.x-f.x), ny = f.y+Math.sign(s.head.y-f.y);
+        if (this.isOpen(nx,ny)){ f.x=nx; f.y=ny; }
+      }
+    }
+  },
+  /* ---------- manger (points, combo, power-ups, achievements) ---------- */
+  eat(s, fi){
+    const f = this.foods[fi], def = FoodTypes[f.type];
+    this.foods.splice(fi,1);
+    const C = this.renderer.cell, px = f.x*C+C/2, py = f.y*C+C/2;
+    this.particles.emit(px, py, def.col, 18, 3.5, .6);
+    if (AudioEngine[def.snd]) AudioEngine[def.snd]();
+    if (f.type === "bomb"){
+      s.bombs++;
+      if (this.achOnce(s, "bomb")){}
+      if (s.fx.shield > 0){ this.achOnce(s, "bombsurvivor"); s.fx.shield = 0; this.shake = 8; return; }
+      this.kill(s, "bombe", true);
+      return;
+    }
+    // combo : manger vite multiplie le score
+    if (this.elapsed - s.lastEat < 2.2) s.combo = Math.min(99, s.combo+1);
+    else s.combo = 1;
+    s.lastEat = this.elapsed;
+    s.maxCombo = Math.max(s.maxCombo, s.combo);
+    const mult = 1 + (s.combo-1)*0.25;
+    s.score += Math.round(def.pts * (f.type === "golden" ? 5 : 1) * mult);
+    s.fruits++;
+    if (f.type !== "normal"){ s.specials++; }
+    if (f.type === "golden") this.lifetime.golden++;
+    if (f.type === "ghost") this.lifetime.ghostEaten++;
+    s.growth += def.grow;
+    this.achOnce(s, "first");
+    if (s.fruits >= 10) this.achOnce(s, "ten");
+    if (s.combo >= 5) this.achOnce(s, "combo5");
+    if (s.combo >= 10) this.achOnce(s, "combo10");
+    if (f.type === "golden") this.achOnce(s, "golden");
+    if (this.lifetime.golden >= 5) this.achOnce(s, "golden5");
+    if (f.type === "ghost") this.achOnce(s, "ghostwalker");
+    if (f.type === "shield") this.achOnce(s, "shielded");
+    if (f.type === "shrink"){ this.lifetime.shrinks++; if (this.lifetime.shrinks >= 3) this.achOnce(s, "shrinker"); }
+    if (def.fx) s.fx[def.fx] = Math.max(s.fx[def.fx], FX_DURATION[def.fx]);
+    this.spawnFood("normal");
+    if (Math.random() < .55 + this.diffIdx*.1) this.trySpawnSpecial();
+    this.shake = Math.max(this.shake, 1.5);
+  },
+  updateEffects(dt){
+    for (const s of this.snakes)
+      for (const k in s.fx) if (s.fx[k] > 0) s.fx[k] = Math.max(0, s.fx[k]-dt);
+  },
+  checkLenAch(s){
+    if (s.len >= 10) this.achOnce(s, "len10");
+    if (s.len >= 25) this.achOnce(s, "len25");
+    if (s.len >= 50) this.achOnce(s, "len50");
+    if (s.len >= 100) this.achOnce(s, "len100");
+    if (s.score >= 500) this.achOnce(s, "score500");
+    if (s.score >= 1000) this.achOnce(s, "score1000");
+    if (this.elapsed >= 60) this.achOnce(s, "survivor1");
+    if (this.elapsed >= 120) this.achOnce(s, "survivor2");
+  },
+  /* ---------- mort ---------- */
+  kill(s, reason, isBomb){
+    if (!s.alive) return;
+    s.alive = false;
+    const C = this.renderer.cell, sk = Skins[s.skin] || Skins.neon;
+    this.particles.explosion(s.head.x*C+C/2, s.head.y*C+C/2, [sk.c1, sk.c2, "#ffffff", "#ff00ff"], 70);
+    this.shake = 12;
+    if (!s.isAI) AudioEngine.die();
+    if (s.isAI){
+      this.lifetime.kills++;
+      this.achOnce(this.player, "killer");
+      if (this.player) this.player.score += 100; // bonus d'élimination
+      if (this.mode !== "royale"){ // l'IA repart après quelques secondes
+        setTimeout(() => {
+          if (this.state === "playing" && this.mode !== "royale"){
+            const g = this.grid, y = g.rows>>1;
+            s.place(g.cols-5, y, [-1,0]); s.score = Math.max(0, s.score-200); s.acc = 0;
+          }
+        }, 4000);
+        return;
+      }
+    }
+    if (this.mode === "royale" && this.state === "playing"){
+      const alive = this.snakes.filter(x => x.alive);
+      if (this.player.alive && alive.length === 1){ this.achOnce(this.player, "brave"); this.gameOver(true, "VICTOIRE ROYALE"); return; }
+      if (!this.player.alive){ this.gameOver(false, "ÉLIMINÉ"); return; }
+    }
+    if (this.mode === "versus" && this.state === "playing"){
+      const alive = this.snakes.filter(x => x.alive);
+      const coop = this.modeMeta.coop;
+      if (coop && alive.length < 2){ this.gameOver(false, "FIN DE COOP"); return; }
+      if (!coop && !s.isAI){
+        const winner = alive[0];
+        this.gameOver(!!winner && winner === this.player, winner === this.player ? "JOUEUR 1 GAGNE" : "JOUEUR 2 GAGNE");
+        return;
+      }
+    }
+    if (!s.isAI && this.mode !== "royale" && this.mode !== "versus"){
+      this.state = "dying";
+      setTimeout(() => { if (this.state === "dying") this.gameOver(false, "GAME OVER"); }, 900);
+    }
+  },
+  /* ---------- objectifs ---------- */
+  checkObjectives(){
+    const P = this.player; if (!P || !P.alive) return;
+    if (this.mode === "timeattack" && this.elapsed >= 120){ this.gameOver(true, "TEMPS ÉCOULÉ"); return; }
+    if (this.mode === "adventure" && this.testObj(this.levelCfg.obj)) this.levelDone();
+  },
+  objProgress(o){
+    if (!o) return null;
+    const P = this.player;
+    const cur = {fruits: P ? P.fruits : 0, len: P ? P.len : 0,
+      survive: this.elapsed|0, score: P ? P.score : 0, special: P ? P.specials : 0}[o.t] || 0;
+    const label = {fruits:"FRUITS", len:"LONGUEUR", survive:"SURVIE (S)", score:"SCORE", special:"SPÉCIAUX"}[o.t];
+    return {txt: cur+"/"+o.v, label};
+  },
+  testObj(o){
+    const P = this.player;
+    switch(o.t){
+      case "fruits": return P.fruits >= o.v;
+      case "len": return P.len >= o.v;
+      case "survive": return this.elapsed >= o.v;
+      case "score": return P.score >= o.v;
+      case "special": return P.specials >= o.v;
+    }
+    return false;
+  },
+  levelDone(){
+    this.state = "win";
+    AudioEngine.stopMusic(); AudioEngine.win();
+    if (this.level >= 5) this.achNow("adv5");
+    const prog = this.progress;
+    if (this.level >= prog.advLevel && this.level < 15){ prog.advLevel = this.level+1; SaveManager.saveProgress(prog); }
+    if (this.level >= 15) this.achNow("adventureDone");
+    SaveManager.saveResume(null);
+    UIManager.showWin();
+  },
+  /* ---------- fin de partie, stats et top 10 persistant ---------- */
+  gameOver(win, title){
+    this.state = "over";
+    AudioEngine.stopMusic();
+    const P = this.player;
+    const total = this.mode === "versus" ? this.snakes.reduce((a,s)=>a+s.score,0) : (P ? P.score : 0);
+    if (P && P.bombs === 0){ this.lifetime.cleanGames++; if (this.lifetime.cleanGames >= 5) this.achNow("pacifist"); }
+    const entry = {score:total, date:new Date().toLocaleDateString("fr-FR"),
+      len:this.snakes.reduce((a,s)=>a+(s.alive?s.len:s.cells.length),0), combo:P?P.maxCombo:0};
+    const rank = SaveManager.addScore(this.scoreKey(), entry);
+    SaveManager.saveResume(null);
+    UIManager.showGameOver(win, title, entry, rank);
+    this.modeMeta.lastEntry = entry;
+  },
+  scoreKey(){ return this.mode; },
+  /* ---------- pause / reprise ---------- */
+  queueDir(s, d){
+    if (!s || !s.alive || this.state !== "playing") return;
+    if (s.queue.length < 2) s.queue.push(d);
+  },
+  pause(){
+    if (this.state === "playing"){
+      this.state = "paused"; this.saveSnapshot();
+      AudioEngine.stopMusic();
+      UIManager.showScreen("scrPause");
+    } else if (this.state === "paused") this.resume();
+  },
+  resume(){
+    if (this.state === "paused"){
+      this.state = "playing";
+      UIManager.hideAll();
+      AudioEngine.startMusic();
+    }
+  },
+  restart(){ this.start(this.mode, this.modeMeta); UIManager.hideAll(); },
+  quitToMenu(){
+    this.state = "menu";
+    AudioEngine.stopMusic();
+    UIManager.showHome();
+  },
+  /* ---------- reprise après fermeture d'onglet ---------- */
+  saveSnapshot(){
+    if (this.state !== "playing" && this.state !== "paused") return;
+    SaveManager.saveResume({
+      mode: this.mode, meta: this.modeMeta, diffIdx: this.diffIdx, level: this.level,
+      elapsed: this.elapsed, lifetime: this.lifetime, foods: this.foods,
+      portals: this.portals,
+      obstacles: this.obstacles.map(o => o.isOpen ? {type:o.type, x:o.x, y:o.y, w:o.w, h:o.h, period:o.period, phase:o.phase} : Object.assign({}, o)),
+      snakes: this.snakes.map(s => ({id:s.id, skin:s.skin, isAI:s.isAI, aiLevel:s.aiLevel,
+        cells:s.cells, prevCells:s.prevCells, dir:s.dir, score:s.score, fruits:s.fruits,
+        specials:s.specials, combo:s.combo, maxCombo:s.maxCombo, alive:s.alive, fx:s.fx,
+        growth:s.growth, p2:s.p2, stepMs:s.stepMs, bombs:s.bombs}))
+    });
+  },
+  resumeGame(){
+    const st = SaveManager.getResume(); if (!st || !st.snakes) return;
+    this.mode = st.mode; this.modeMeta = st.meta || {}; this.diffIdx = st.diffIdx;
+    this.level = st.level || 1; this.elapsed = st.elapsed || 0;
+    this.lifetime = st.lifetime || this.lifetime;
+    this.levelCfg = this.mode === "adventure" ? levelCfg(this.level) : null;
+    this.tickMs = this.baseStep() / (this.levelCfg && this.levelCfg.speed || 1);
+    this.foods = st.foods || []; this.portals = st.portals || [];
+    this.obstacles = (st.obstacles || []).map(o => {
+      if (o.type === "door"){ o.isOpen = t => ((t/o.period + o.phase) % 1) < .5; return o; }
+      return o;
+    });
+    this.snakes = (st.snakes || []).map(sd => {
+      const s = new Snake(sd.id, sd.skin, sd.isAI, sd.aiLevel);
+      s.cells = sd.cells.map(c=>({...c})); s.prevCells = sd.prevCells.map(c=>({...c}));
+      if (!s.prevCells.length) s.prevCells = s.cells.map(c=>({...c}));
+      s.dir = sd.dir; s.score = sd.score; s.fruits = sd.fruits; s.specials = sd.specials;
+      s.combo = sd.combo; s.maxCombo = sd.maxCombo; s.alive = sd.alive; s.fx = sd.fx;
+      s.growth = sd.growth; s.p2 = sd.p2; s.bombs = sd.bombs; s.stepMs = sd.stepMs || this.baseStep();
+      s.queue = []; s.trail = []; s.acc = 0;
+      return s;
+    });
+    this.player = this.snakes.find(s => !s.isAI && !s.p2) || this.snakes[0];
+    this.acc = 0; this.timeScale = 1; this.shake = 0; this.foodTimer = 0;
+    this.particles.clear();
+    this.specialPool = ["golden","ghost","speed","bomb","bomb","shrink","slowmo","shield","magnet"];
+    this.state = "playing";
+    UIManager.hideAll(); UIManager.showHUD(true);
+    AudioEngine.startMusic();
+  },
+  /* ---------- IA adverse (3 niveaux : chasse, évitement, coup du joueur) ---------- */
+  moveAI(s){
+    const g = this.grid;
+    const target = this.pickAIFood(s);
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    const scoreDir = d => {
+      let nx = s.head.x+d[0], ny = s.head.y+d[1];
+      const wrap = this.mode === "unlimited" || s.fx.ghost > 0;
+      if (wrap){ nx = this.wrapCoord(nx, g.cols); ny = this.wrapCoord(ny, g.rows); }
+      else if (nx < 0 || ny < 0 || nx >= g.cols || ny >= g.rows) return -1e9;
+      if (this.isBlocked(nx, ny)) return -1e9;
+      for (const o of this.snakes){
+        if (!o.alive) continue;
+        for (let i = (o===s?1:0); i<o.cells.length; i++)
+          if (o.cells[i].x === nx && o.cells[i].y === ny) return -1e9;
+      }
+      for (const f of this.foods) if (f.type === "bomb" && f.x === nx && f.y === ny) return -500;
+      let sc = 0;
+      if (target) sc -= (Math.abs(target.x-nx)+Math.abs(target.y-ny))*3;
+      // espace libre estimé (flood-fill borné) : évite de s'enfermer
+      sc += this.freeSpace(nx, ny, s, 20 + s.aiLevel*10)*2;
+      // niveau 3 : coupe la route du joueur
+      if (s.aiLevel >= 3 && this.player && this.player.alive && !this.player.isAI){
+        const P = this.player;
+        const dNow = Math.abs(P.head.x-s.head.x)+Math.abs(P.head.y-s.head.y);
+        const dNew = Math.abs(P.head.x-nx)+Math.abs(P.head.y-ny);
+        if (dNew < dNow && dNow < 10) sc += 8;
+      }
+      if (s.aiLevel < 2 && (nx===0||ny===0||nx===g.cols-1||ny===g.rows-1)) sc -= 4;
+      return sc + Math.random()*2;
+    };
+    dirs.sort((a,b) => scoreDir(b)-scoreDir(a));
+    if (scoreDir(dirs[0]) <= -1e9){ // coincée : tente quand même, sinon meurt
+      this.kill(s, "coincée IA"); return;
+    }
+    s.dir = dirs[0];
+    this.moveSnake(s, s.head.x+s.dir[0], s.head.y+s.dir[1]);
+  },
+  freeSpace(x, y, self, limit){
+    const seen = new Set(), q = [[x,y]]; let count = 0;
+    const g = this.grid;
+    const wrap = this.mode === "unlimited";
+    while (q.length && count < limit){
+      const [cx,cy] = q.shift(); const k = cx+","+cy;
+      if (seen.has(k)) continue; seen.add(k);
+      if (cx<0||cy<0||cx>=g.cols||cy>=g.rows){ if (!wrap) continue; }
+      if (this.isBlocked(cx,cy)) continue;
+      let occ = false;
+      for (const o of this.snakes){
+        if (!o.alive) continue;
+        for (let i=0;i<o.cells.length;i++){
+          if (o.cells[i].x===cx && o.cells[i].y===cy && !(o===self && i===0)){ occ = true; break; }
+        }
+        if (occ) break;
+      }
+      if (occ) continue;
+      count++;
+      q.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+    }
+    return count;
+  },
+  pickAIFood(s){
+    let best = null, bd = 1e9;
+    for (const f of this.foods){
+      if (f.type === "bomb") continue;
+      if (s.aiLevel < 2 && f.ttl !== undefined && f.ttl < 2) continue;
+      const d = Math.abs(f.x-s.head.x)+Math.abs(f.y-s.head.y);
+      if (d < bd){ bd = d; best = f; }
+    }
+    return best;
+  },
+  /* ---------- réussites ---------- */
+  ach(id){
+    if (!this.progress.achievements.includes(id)){
+      this.progress.achievements.push(id);
+      SaveManager.saveProgress(this.progress);
+      const a = ACHIEVEMENTS.find(x => x.id === id);
+      UIManager.toast("RÉUSSITE DÉBLOQUÉE", (a ? a.ico+" " : "") + (a ? a.name : id));
+      AudioEngine.ach();
+    }
+  },
+  achOnce(s, id){ if (s && s === this.player) this.ach(id); },
+  achNow(id){ this.ach(id); },
+};
+
+/* ============ MODULE UIManager ============ */
+const MODES = [
+  {id:"classic",   ico:"🧱", name:"Classique",        desc:"Murs mortels, fruits et bonus", free:true},
+  {id:"unlimited",  ico:"🕳", name:"Illimité",         desc:"Traversez les bords de l'arène", free:true},
+  {id:"adventure", ico:"🗺", name:"Aventure",         desc:"15 niveaux progressifs",         free:true},
+  {id:"timeattack", ico:"⏱", name:"Contre-la-montre", desc:"2 minutes, score max", lock:"Faites 300 pts en solo"},
+  {id:"versus",     ico:"👥", name:"Multijoueur",     desc:"2 joueurs locaux — duel ou coop", lock:"Faites 200 pts en solo"},
+  {id:"royale",     ico:"🏟", name:"Battle Royale",    desc:"Face à 3 serpents IA", lock:"Marquez un point en Multijoueur"},
+];
+const UIManager = {
+  el(id){ return document.getElementById(id); },
+  init(){
+    this.buildModeCards(); this.buildDiffRow();
+    this.bindEvents(); this.syncSettingsUI();
+    AudioEngine.ctxOK();
+  },
+  showScreen(id){
+    document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
+    this.el(id).classList.remove("hidden");
+  },
+  hideAll(){ document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden")); },
+  showHUD(v){ this.el("hud").style.display = v ? "flex" : "none";
+    this.el("dpad").style.display = v && GameEngine.settings.dpad ? "grid" : "none"; },
+  showHome(){
+    this.showScreen("scrHome"); this.showHUD(false);
+    this.el("achCount").textContent = GameEngine.progress.achievements.length + "/" + ACHIEVEMENTS.length + " réussites";
+    const r = SaveManager.getResume();
+    const slot = this.el("resumeSlot");
+    if (r && r.snakes && (r.mode)){
+      const mn = (MODES.find(m => m.id === r.mode) || {}).name || r.mode;
+      slot.innerHTML = '<div class="row"><button class="btn primary" id="btnResGame">▶ Reprendre la partie ('+mn+')</button></div>';
+      this.el("btnResGame").onclick = () => { AudioEngine.ui(); GameEngine.resumeGame(); };
+    } else slot.innerHTML = "";
+  },
+  toast(t1, t2){
+    const d = document.createElement("div");
+    d.className = "toast";
+    d.innerHTML = '<div class="t1">'+t1+'</div><div class="t2">'+t2+'</div>';
+    this.el("toasts").appendChild(d);
+    setTimeout(() => { d.classList.add("out"); setTimeout(() => d.remove(), 450); }, 3200);
+    while (this.el("toasts").children.length > 4) this.el("toasts").firstChild.remove();
+  },
+  /* ---- cartes de mode ---- */
+  buildModeCards(){
+    const list = this.el("modeList"); list.innerHTML = "";
+    MODES.forEach(m => {
+      const unlocked = m.free || GameEngine.progress.unlockedModes.includes(m.id);
+      const d = document.createElement("div");
+      d.className = "modeCard" + (unlocked ? "" : " lock");
+      d.innerHTML = '<div class="ic">'+m.ico+'</div><div class="nm">'+m.name+'</div>'+
+        (unlocked ? '<div class="ds">'+m.desc+'</div>' : '<div class="ds">🔒 '+m.lock+'</div>');
+      d.onclick = () => {
+        if (!unlocked){ this.toast("MODE VERROUILLÉ", m.lock); return; }
+        AudioEngine.ui();
+        if (m.id === "adventure"){ this.showScreen("scrLevels"); this.buildLevelGrid(); }
+        else if (m.id === "versus") this.showScreen("scrVs");
+        else { GameEngine.start(m.id, {}); this.hideAll(); }
+      };
+      list.appendChild(d);
+    });
+  },
+  buildDiffRow(){
+    const row = this.el("diffRow"); row.innerHTML = "";
+    DIFFS.forEach((d,i) => {
+      const b = document.createElement("button");
+      b.className = "btn small" + (i === GameEngine.diffIdx ? " sel" : "");
+      b.textContent = d.name;
+      b.onclick = () => { GameEngine.diffIdx = i; AudioEngine.ui(); this.buildDiffRow(); };
+      row.appendChild(b);
+    });
+  },
+  buildLevelGrid(){
+    const g = this.el("levelGrid"); g.innerHTML = "";
+    const prog = GameEngine.progress;
+    for (let i=1;i<=15;i++){
+      const cfg = levelCfg(i);
+      const locked = i > prog.advLevel;
+      const b = document.createElement("div");
+      b.className = "lvlBtn" + (locked ? " lock" : "") + (i === prog.advLevel ? " cur" : "");
+      b.innerHTML = "<b>"+i+"</b><br><small>"+cfg.name+"</small>";
+      b.title = "Objectif : " + this.objTxt(cfg.obj);
+      b.onclick = () => {
+        if (locked){ this.toast("NIVEAU VERROUILLÉ", "Terminez le niveau précédent"); return; }
+        AudioEngine.ui();
+        GameEngine.start("adventure", {level:i});
+        this.hideAll();
+      };
+      g.appendChild(b);
+    }
+  },
+  objTxt(o){
+    const L = {fruits:"manger fruits", len:"longueur", survive:"survivre (s)", score:"score", special:"fruits spéciaux"};
+    return (L[o.t]||"") + " " + o.v;
+  },
+  /* ---- réussites ---- */
+  buildAchList(){
+    const l = this.el("achList"); if (!l) return; l.innerHTML = "";
+    const got = GameEngine.progress.achievements;
+    ACHIEVEMENTS.forEach(a => {
+      const d = document.createElement("div");
+      d.className = "ach" + (got.includes(a.id) ? " done" : "");
+      d.innerHTML = '<div class="ico">'+a.ico+'</div><div><div class="nm">'+a.name+'</div><div class="ds">'+a.desc+'</div></div>';
+      l.appendChild(d);
+    });
+  },
+  /* ---- skins ---- */
+  buildSkinList(){
+    const l = this.el("skinList"); if (!l) return; l.innerHTML = "";
+    Object.entries(Skins).forEach(([id, sk]) => {
+      const un = !sk.need || GameEngine.progress.achievements.includes(sk.need.ach);
+      const d = document.createElement("div");
+      d.className = "skinBox" + (GameEngine.progress.skin === id ? " sel" : "") + (un ? "" : " locked");
+      d.innerHTML = '<div class="swatch" style="background:linear-gradient(90deg,'+sk.c1+','+sk.c2+')"></div>'+
+        '<div class="nm">'+sk.name+'</div>' + (un ? "" : '<div class="req">🔒 '+sk.need.show+'</div>');
+      d.onclick = () => {
+        if (!un){ this.toast("SKIN VERROUILLÉ", sk.need.show); return; }
+        GameEngine.progress.skin = id;
+        SaveManager.saveProgress(GameEngine.progress);
+        AudioEngine.ui(); this.buildSkinList();
+      };
+      l.appendChild(d);
+    });
+  },
+  /* ---- scores par mode ---- */
+  buildScoreTabs(tab){
+    const tabs = this.el("scoreTabs"); tabs.innerHTML = "";
+    const cur = tab || this._scoreTab || "classic"; this._scoreTab = cur;
+    MODES.forEach(m => {
+      const b = document.createElement("button");
+      b.className = "btn small" + (m.id === cur ? " sel" : "");
+      b.textContent = m.name;
+      b.onclick = () => this.buildScoreTabs(m.id);
+      tabs.appendChild(b);
+    });
+    const t = this.el("scoreTab"); t.innerHTML = "";
+    const arr = SaveManager.getScores()[cur] || [];
+    if (!arr.length){
+      t.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#678">Aucun score — à vous de jouer !</td></tr>';
+      return;
+    }
+    arr.forEach((e,i) => t.insertAdjacentHTML("beforeend",
+      '<tr><td>#'+(i+1)+'</td><td>'+e.score+'</td><td>long. '+e.len+'</td><td>'+e.date+'</td></tr>'));
+  },
+  /* ---- réglages ---- */
+  syncSettingsUI(){
+    const s = GameEngine.settings;
+    this.el("sVol").value = s.vol*100; this.el("sMusic").checked = s.music;
+    this.el("sSpeed").value = s.speed; this.el("sSpeedV").textContent = s.speed+"%";
+    this.el("sGrid").value = s.grid; this.el("sPal").value = s.pal;
+    this.el("sLow").checked = s.low; this.el("sDpad").checked = s.dpad;
+    AudioEngine.setVolume(s.vol);
+    AudioEngine.setMuted(GameEngine.muted);
+    this.updateMuteBtn();
+  },
+  updateMuteBtn(){
+    const m = GameEngine.muted;
+    ["btnMute","btnMute2","btnMute3"].forEach(id => { const e = this.el(id); if (e) e.textContent = m ? "🔇 Muet" : "🔊 Son"; });
+  },
+  buildKeyBind(){
+    const l = this.el("keyBind"); if (!l) return; l.innerHTML = "";
+    const names = {up:"Haut", down:"Bas", left:"Gauche", right:"Droite"};
+    for (const [k, code] of Object.entries(GameEngine.settings.keys)){
+      const wrap = document.createElement("span");
+      wrap.innerHTML = '<span class="label">'+names[k]+'</span>';
+      const cap = document.createElement("span");
+      cap.className = "keyCap"; cap.textContent = this.keyLabel(code);
+      cap.onclick = () => {
+        cap.textContent = "… appuyez";
+        InputManager.bindNextKey(newCode => {
+          GameEngine.settings.keys[k] = newCode;
+          SaveManager.saveSettings(GameEngine.settings);
+          InputManager.setKeys(GameEngine.settings.keys);
+          this.buildKeyBind();
+        });
+      };
+      wrap.appendChild(cap);
+      l.appendChild(wrap);
+    }
+  },
+  keyLabel(code){
+    return code.replace("Key","").replace("Digit","").replace("Arrow","");
+  },
+  /* ---- HUD ---- */
+  updateHUD(){
+    const ge = GameEngine, P = ge.player;
+    if (!P) return;
+    const coop = ge.mode === "versus" && ge.modeMeta.coop;
+    this.el("hScore").textContent = coop ? ge.snakes.reduce((a,s)=>a+s.score,0) : P.score;
+    const best = ((SaveManager.getScores()[ge.scoreKey()]||[{}])[0] || {}).score || 0;
+    this.el("hBest").textContent = Math.max(best, coop ? P.score*2 : P.score);
+    this.el("hLen").textContent = coop ? ge.snakes.reduce((a,s)=>a+s.len,0) : P.len;
+    this.el("comboTxt").textContent = P.combo > 1 ? "x"+P.combo : "—";
+    this.el("comboFill").style.width = P.combo > 1 ? Math.max(0, 100*(1 - (ge.elapsed - P.lastEat)/2.2))+"%" : "0%";
+    const m = (ge.elapsed/60)|0, sec = (ge.elapsed%60)|0;
+    this.el("hTime").textContent = m+":"+String(sec).padStart(2,"0");
+    if (ge.mode === "adventure"){
+      const o = ge.objProgress(ge.levelCfg.obj);
+      this.el("hObj").textContent = o.txt; this.el("hObjL").textContent = o.label;
+    } else if (ge.mode === "timeattack"){
+      this.el("hObj").textContent = ((Math.max(0, 120-ge.elapsed))|0)+"s";
+      this.el("hObjL").textContent = "RESTANT";
+    } else if (ge.mode === "royale"){
+      this.el("hObj").textContent = ge.snakes.filter(s => s.alive).length;
+      this.el("hObjL").textContent = "VIVANTS";
+    } else if (coop){
+      this.el("hObj").textContent = "🤝"; this.el("hObjL").textContent = "COOP";
+    } else {
+      this.el("hObj").textContent = "—"; this.el("hObjL").textContent = "OBJECTIF";
+    }
+    const pu = this.el("powerups"); pu.innerHTML = "";
+    const meta = {shield:["⛨","#0ff"], ghost:["◈","#9df"], speed:["»","#f80"], slowmo:["◔","#8ef"], magnet:["◎","#fa0"]};
+    for (const [k,v] of Object.entries(P.fx)){
+      if (v > 0){
+        const col = meta[k][1];
+        const d = document.createElement("div");
+        d.className = "pu"; d.style.borderColor = col;
+        d.innerHTML = '<span style="color:'+col+'">'+meta[k][0]+'</span>'+
+          '<span style="color:'+col+'">'+v.toFixed(1)+'s</span>'+
+          '<div class="bar" style="width:'+(100*v/FX_DURATION[k])+'%"></div>';
+        pu.appendChild(d);
+      }
+    }
+  },
+  showWin(){
+    this.showScreen("scrWin"); this.showHUD(false);
+    const P = GameEngine.player;
+    this.el("winStats").innerHTML = this.statRows([
+      ["Score", P.score], ["Fruits", P.fruits], ["Spéciaux", P.specials],
+      ["Longueur", P.len], ["Meilleur combo", "x"+P.maxCombo], ["Temps", this.fmtTime(GameEngine.elapsed)]
+    ]);
+    this.el("btnNextLvl").style.display = GameEngine.level < 15 ? "" : "none";
+  },
+  showGameOver(win, title, entry, rank){
+    this.showScreen("scrOver"); this.showHUD(false);
+    const ge = GameEngine, P = ge.player;
+    this.el("overTitle").textContent = title || (win ? "VICTOIRE !" : "GAME OVER");
+    this.el("overTitle").style.color = win ? "#7f7" : "#f77";
+    let extra = "";
+    if (ge.mode === "versus"){
+      extra = this.statRows(ge.snakes.map(s => ["Joueur "+s.id, s.score+" pts"]));
+    }
+    this.el("overStats").innerHTML = this.statRows([
+      ["Score final", entry.score], ["Meilleur combo", "x"+entry.combo],
+      ["Longueur", entry.len], ["Fruits mangés", P ? P.fruits : 0],
+      ["Temps de survie", this.fmtTime(ge.elapsed)],
+      ["Rang", rank >= 0 && rank < 10 ? "#"+(rank+1) : "hors top 10"]
+    ]) + extra;
+    const arr = SaveManager.getScores()[ge.scoreKey()] || [];
+    const t = this.el("overHs"); t.innerHTML = "";
+    arr.forEach((e,i) => t.insertAdjacentHTML("beforeend",
+      '<tr'+(e===entry?' class="me"':'')+'><td>#'+(i+1)+'</td><td>'+e.score+'</td><td>long. '+e.len+'</td><td>'+e.date+'</td></tr>'));
+  },
+  statRows(rows){
+    return rows.map(r => '<div class="k">'+r[0]+'</div><div class="v">'+r[1]+'</div>').join("");
+  },
+  fmtTime(s){ const m = (s/60)|0, r = (s%60)|0; return m+":"+String(r).padStart(2,"0"); },
+  /* ---- événements ---- */
+  bindEvents(){
+    const ge = GameEngine;
+    document.querySelectorAll("[data-back]").forEach(b => b.onclick = () => {
+      AudioEngine.ui();
+      if (ge.state !== "playing"){ ge.state = "menu"; this.showHome(); }
+    });
+    this.el("btnPlay").onclick = () => { AudioEngine.ui(); this.showScreen("scrModes"); };
+    this.el("btnAch").onclick = () => { AudioEngine.ui(); this.buildAchList(); this.showScreen("scrAch"); };
+    this.el("btnSkins").onclick = () => { AudioEngine.ui(); this.buildSkinList(); this.showScreen("scrSkins"); };
+    this.el("btnScores").onclick = () => { AudioEngine.ui(); this.buildScoreTabs(); this.showScreen("scrScores"); };
+    this.el("btnSet").onclick = () => { AudioEngine.ui(); this.showScreen("scrSet"); };
+    this.el("btnWipe").onclick = () => { SaveManager.wipeScores(); this.buildScoreTabs(); this.toast("OK", "Scores effacés"); };
+    this.el("btnPause2").onclick = () => ge.pause();
+    this.el("btnResume").onclick = () => ge.resume();
+    this.el("btnRestartP").onclick = () => ge.restart();
+    this.el("btnQuitP").onclick = () => { ge.state = "menu"; ge.saveSnapshot(); ge.quitToMenu(); };
+    this.el("btnAgain").onclick = () => ge.restart();
+    this.el("btnMenu").onclick = () => ge.quitToMenu();
+    this.el("btnMenu2").onclick = () => ge.quitToMenu();
+    this.el("btnNextLvl").onclick = () => { ge.start("adventure", {level: ge.level+1}); this.hideAll(); };
+    // versus : duel ou coop
+    let vsCoop = false;
+    this.el("vsDuel").onclick = () => {
+      vsCoop = false;
+      this.el("vsDuel").classList.add("sel"); this.el("vsCoop").classList.remove("sel");
+      this.el("vsDesc").textContent = "Duel : le premier serpent qui meurt a perdu. J1 = ZQSD / J2 = Flèches.";
+    };
+    this.el("vsCoop").onclick = () => {
+      vsCoop = true;
+      this.el("vsCoop").classList.add("sel"); this.el("vsDuel").classList.remove("sel");
+      this.el("vsDesc").textContent = "Coop : score partagé, la mort d'un des deux met fin à la partie.";
+    };
+    this.el("btnVsGo").onclick = () => { ge.start("versus", {coop: vsCoop}); this.hideAll(); };
+    // mute persistant
+    ["btnMute","btnMute2","btnMute3"].forEach(id => this.el(id).onclick = () => {
+      ge.muted = !ge.muted;
+      localStorage.setItem("neonsnake_v1_muted", ge.muted ? "1" : "0");
+      AudioEngine.setMuted(ge.muted); this.updateMuteBtn();
+    });
+    // réglages
+    const saveNow = () => SaveManager.saveSettings(ge.settings);
+    this.el("sVol").oninput = e => { ge.settings.vol = e.target.value/100; AudioEngine.setVolume(ge.settings.vol); saveNow(); };
+    this.el("sMusic").onchange = e => { ge.settings.music = e.target.checked; AudioEngine.setMusic(e.target.checked); saveNow(); };
+    this.el("sSpeed").oninput = e => { ge.settings.speed = +e.target.value; this.el("sSpeedV").textContent = ge.settings.speed+"%"; saveNow(); ge.tickMs = ge.baseStep()/(ge.levelCfg && ge.levelCfg.speed||1); };
+    this.el("sGrid").onchange = e => { ge.settings.grid = e.target.value; saveNow(); ge.applyGrid(ge.settings.grid); ge.renderer.resize(); };
+    this.el("sPal").onchange = e => { ge.settings.pal = e.target.value; saveNow(); ge.renderer.bgStars = null; };
+    this.el("sLow").onchange = e => { ge.settings.low = e.target.checked; ge.particles.effects = !ge.settings.low; saveNow(); ge.renderer.bgStars = null; };
+    this.el("sDpad").onchange = e => { ge.settings.dpad = e.target.checked; saveNow(); this.showHUD(ge.state === "playing"); };
+    this.el("btnResetKeys").onclick = () => {
+      ge.settings.keys = {up:"KeyZ",down:"KeyS",left:"KeyQ",right:"KeyD"};
+      saveNow(); InputManager.setKeys(ge.settings.keys); this.buildKeyBind();
+    };
+    // clavier global : pause, restart rapide, direction avec file d'attente
+    InputManager.onKey(e => {
+      if (e.code === "KeyP" || e.code === "Escape"){ ge.pause(); return; }
+      if (e.code === "KeyR" && ["playing","paused","over","dying"].includes(ge.state)){ ge.restart(); return; }
+      if (ge.state !== "playing") return;
+      for (const s of ge.snakes){
+        if (s.isAI || !s.alive) continue;
+        if (s.p2 || s.id === 2){
+          const d2 = InputManager.dirFrom(e.code, 2);
+          if (d2){ ge.queueDir(s, d2); return; }
+        } else {
+          const d1 = InputManager.dirFrom(e.code, 1);
+          if (d1){ ge.queueDir(s, d1); return; }
+        }
+      }
+    });
+    // d-pad tactile
+    this.el("dpad").querySelectorAll("button").forEach(b => {
+      const press = ev => {
+        ev.preventDefault();
+        const p = b.dataset.d.split(",").map(Number);
+        if (ge.state === "playing") ge.queueDir(ge.player, p);
+      };
+      b.addEventListener("touchstart", press, {passive:false});
+      b.addEventListener("mousedown", press);
+    });
+    // reprise de partie : sauvegarde à la fermeture/onglet caché
+    window.addEventListener("beforeunload", () => ge.saveSnapshot());
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && ge.state === "playing") ge.pause();
+    });
+  },
+};
+
+/* ============ DÉMARRAGE ============ */
+window.addEventListener("load", () => {
+  GameEngine.init();
+  UIManager.init();
+  InputManager.setKeys(GameEngine.settings.keys);
+  // déblocage progressif des modes selon les scores persistés
+  const sc = SaveManager.getScores(), prog = GameEngine.progress;
+  const solo = (sc.classic||[]).concat(sc.unlimited||[]);
+  const unlock = m => { if (!prog.unlockedModes.includes(m)) prog.unlockedModes.push(m); };
+  if (solo.some(e => e.score >= 200)) unlock("versus");
+  if (solo.some(e => e.score >= 300)) unlock("timeattack");
+  if ((sc.versus||[]).length >= 1) unlock("royale");
+  SaveManager.saveProgress(prog);
+  // portes : fonction d'ouverture périodique
+  DoorInit();
+  UIManager.buildModeCards();
+  UIManager.showHome();
+  requestAnimationFrame(t => { GameEngine.lastT = t; GameEngine.loop(t); });
+  // réveil audio au premier geste (politique navigateur)
+  const wake = () => { AudioEngine.ui(); AudioEngine.setMusic(GameEngine.settings.music); document.removeEventListener("pointerdown", wake); document.removeEventListener("keydown", wake); };
+  document.addEventListener("pointerdown", wake);
+  document.addEventListener("keydown", wake);
+});
+function DoorInit(){
+  // les portes alternent ouvert/fermé toutes les `period` secondes (phase en secondes)
+  const orig = GameEngine.buildAdventureLayout;
+  GameEngine.buildAdventureLayout = function(cfg){
+    orig.call(this, cfg);
+    for (const o of this.obstacles){
+      if (o.type === "door")
+        o.isOpen = t => (((t + o.phase) / o.period) % 1) < .5;
+    }
+  };
+}
+</script>
+</body>
+</html>
